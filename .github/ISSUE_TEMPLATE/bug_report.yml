@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible Taprivo problem
+title: "[Bug]: "
+labels: [bug, needs-triage]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Taprivo version and installation method
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: macOS version, Mac chip, camera and agent version
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include a simulator reproduction if possible. Do not upload camera footage or secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      description: Output of `taprivo doctor --json`. Review it before sharing; remove tokens and private paths.
