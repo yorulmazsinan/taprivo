@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "taprivo": {
+      "type": "http",
+      "url": "http://127.0.0.1:32145/mcp",
+      "headers": { "Authorization": "Bearer ${TAPRIVO_TOKEN}" }
+    }
+  }
+}
