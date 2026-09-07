@@ -202,7 +202,10 @@ class ClaudeAdapter:
         return note + "instruction import installed\n" + unified_diff(before, after, str(path))
 
     def _merge_project(self, target: Path) -> str:
-        existing = json.loads(target.read_text("utf-8")) if target.exists() else {}
+        try:
+            existing = json.loads(target.read_text("utf-8")) if target.exists() else {}
+        except json.JSONDecodeError as exc:
+            raise SetupError(f"{target} is not valid JSON: {exc}") from exc
         entry = {
             "type": "http",
             "url": self.endpoint,
@@ -281,7 +284,10 @@ class ClaudeAdapter:
         return "instructions file deleted"
 
     def _remove_project(self, target: Path) -> str:
-        existing = json.loads(target.read_text("utf-8"))
+        try:
+            existing = json.loads(target.read_text("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise SetupError(f"{target} is not valid JSON: {exc}") from exc
         updated = remove_mcp_server(existing, SERVER_NAME)
         target.write_text(json.dumps(updated, indent=2) + "\n", encoding="utf-8")
         return f"removed 'taprivo' from {target}"

@@ -54,12 +54,38 @@ def test_merge_and_remove_mcp_server_preserve_others() -> None:
     assert "taprivo" not in removed["mcpServers"] and "other" in removed["mcpServers"]
 
 
+def test_remove_mcp_server_leaves_document_without_mcp_servers_untouched() -> None:
+    existing = {"extra": 1}
+    result = remove_mcp_server(existing, "taprivo")
+    assert result == existing
+    assert "mcpServers" not in result
+
+
 def test_write_if_changed_and_backup(tmp_path: Path) -> None:
     target = tmp_path / "f.md"
     assert write_if_changed(target, "a") is True
     assert write_if_changed(target, "a") is False
     copy = backup(target)
     assert copy.read_text() == "a" and copy.name.startswith("f.md.taprivo-backup-")
+
+
+def test_backup_names_do_not_collide_within_the_same_second(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import taprivo.adapters.base as base_module
+
+    class _FixedDatetime(base_module.datetime):
+        @classmethod
+        def now(cls, tz: object = None) -> base_module.datetime:  # type: ignore[override]
+            return base_module.datetime(2026, 1, 1, tzinfo=base_module.UTC)
+
+    monkeypatch.setattr(base_module, "datetime", _FixedDatetime)
+    target = tmp_path / "f.md"
+    target.write_text("a")
+    first = backup(target)
+    second = backup(target)
+    assert first != second
+    assert first.exists() and second.exists()
 
 
 def test_redact() -> None:

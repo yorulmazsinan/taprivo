@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import secrets
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -77,7 +78,8 @@ def write_if_changed(path: Path, content: str) -> bool:
 
 def backup(path: Path) -> Path:
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    target = path.with_name(f"{path.name}.taprivo-backup-{stamp}")
+    suffix = secrets.token_hex(3)
+    target = path.with_name(f"{path.name}.taprivo-backup-{stamp}-{suffix}")
     shutil.copy2(path, target)
     return target
 
@@ -137,6 +139,8 @@ def merge_mcp_server(existing: dict[str, Any], name: str, entry: dict[str, Any])
 
 
 def remove_mcp_server(existing: dict[str, Any], name: str) -> dict[str, Any]:
+    if "mcpServers" not in existing:
+        return existing
     merged = dict(existing)
     servers = dict(merged.get("mcpServers") or {})
     servers.pop(name, None)

@@ -46,6 +46,7 @@ def read_or_create_token() -> str:
     ensure_home()
     path = token_path()
     if path.exists():
+        os.chmod(path, 0o600)
         return path.read_text(encoding="utf-8").strip()
     token = secrets.token_urlsafe(TOKEN_BYTES)
     try:
@@ -54,6 +55,7 @@ def read_or_create_token() -> str:
             fh.write(token + "\n")
     except FileExistsError:
         # Another process won the race; read the token they created
+        os.chmod(path, 0o600)
         return path.read_text(encoding="utf-8").strip()
     return token
 

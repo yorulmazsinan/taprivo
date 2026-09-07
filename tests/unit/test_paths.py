@@ -31,6 +31,14 @@ def test_token_is_created_once_with_0600(taprivo_home: Path) -> None:
     assert stat.S_IMODE(paths.token_path().stat().st_mode) == 0o600
 
 
+def test_existing_token_permissions_are_repaired(taprivo_home: Path) -> None:
+    first = paths.read_or_create_token()
+    os.chmod(paths.token_path(), 0o644)
+    second = paths.read_or_create_token()
+    assert second == first
+    assert stat.S_IMODE(paths.token_path().stat().st_mode) == 0o600
+
+
 def test_instance_lock_is_exclusive(taprivo_home: Path) -> None:
     a = paths.InstanceLock()
     b = paths.InstanceLock()

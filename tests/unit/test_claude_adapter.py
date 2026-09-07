@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import stat
 import subprocess
 from pathlib import Path
@@ -9,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from taprivo import paths
-from taprivo.adapters.base import SetupOptions
+from taprivo.adapters.base import SetupError, SetupOptions
 from taprivo.adapters.claude import END_MARKER, IMPORT_LINE, START_MARKER, ClaudeAdapter
 from taprivo.config import Config
 
@@ -172,6 +171,32 @@ def test_project_merge_preserves_other_servers(
     assert token not in (project / ".mcp.json").read_text()
 
 
+def test_merge_project_rejects_malformed_json(
+    adapter: tuple[ClaudeAdapter, FakeClaude], tmp_path: Path
+) -> None:
+    ad, _ = adapter
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".mcp.json").write_text("{not valid json")
+    plan = ad.plan_setup(SetupOptions(project=True, project_dir=project))
+    merge_action = next(a for a in plan.actions if a.kind == "merge_json")
+    with pytest.raises(SetupError, match="not valid JSON"):
+        merge_action.apply()
+
+
+def test_remove_project_rejects_malformed_json(
+    adapter: tuple[ClaudeAdapter, FakeClaude], tmp_path: Path
+) -> None:
+    ad, _ = adapter
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / ".mcp.json").write_text("{not valid json")
+    plan = ad.plan_remove(SetupOptions(project=True, project_dir=project))
+    remove_action = next(a for a in plan.actions if a.kind == "edit_json")
+    with pytest.raises(SetupError, match="not valid JSON"):
+        remove_action.apply()
+
+
 def test_remove_deletes_only_taprivo_parts(
     adapter: tuple[ClaudeAdapter, FakeClaude], home: Path, tmp_path: Path
 ) -> None:
@@ -200,6 +225,5 @@ def test_verify_reports_each_check(adapter: tuple[ClaudeAdapter, FakeClaude]) ->
     assert before["instructions_file"] == "fail"
     assert before["instructions_import"] == "warn"
     apply_all(ad, SetupOptions(install_instructions=True))
-    os.chmod(paths.token_path(), 0o600)
     after = {c.name: c.status for c in ad.verify()}
     assert set(after.values()) == {"ok"}
