@@ -234,14 +234,6 @@ def setup_claude(
     _setup_claude(project, install_instructions, dry_run)
 
 
-@setup_app.command("project")
-def setup_project(
-    dry_run: bool = typer.Option(False, "--dry-run", help="Show planned changes without writing."),
-) -> None:
-    """Alias for 'setup claude --project'."""
-    _setup_claude(True, False, dry_run)
-
-
 @remove_app.command("claude")
 def remove_claude(
     project: bool = typer.Option(False, "--project", help="Also remove Taprivo from ./.mcp.json."),
