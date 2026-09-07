@@ -1,0 +1,20 @@
+schema_version: 1
+energy:
+  energy_per_tap: 10
+  max_energy: 10000
+combo:
+  enabled: true
+  timeout_ms: 600
+  energy_multiplier_enabled: false
+server:
+  host: 127.0.0.1
+  port: 32145
+  max_reason_length: 200
+  rate_limit_per_second: 20
+simulator:
+  displacement: 0.04
+  velocity: 0.6
+hud:
+  always_on_top: true
+  opacity: 0.92
+  reduced_motion: false
