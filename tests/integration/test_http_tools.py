@@ -43,6 +43,50 @@ def test_spend_over_http_is_idempotent(running_server: RunningServer) -> None:
     assert running_server.engine.snapshot().spent == 30
 
 
+def test_two_clients_share_one_balance(running_server: RunningServer) -> None:
+    for _ in range(5):
+        running_server.simulator.tap(Finger.INDEX)
+    client_a = client_for(running_server)
+    client_b = client_for(running_server)
+
+    energy_a = run_sync(client_a.call("get_energy", {}))
+    energy_b = run_sync(client_b.call("get_energy", {}))
+    assert energy_a["available"] == energy_b["available"] == 50
+
+    session_id = running_server.engine.session_id
+    spend_a = run_sync(
+        client_a.call(
+            "spend_energy",
+            {
+                "amount": 20,
+                "reason": "client a spend",
+                "request_id": "two-clients-a",
+                "session_id": session_id,
+                "project_id": "project-a",
+            },
+        )
+    )
+    assert spend_a["success"] is True
+
+    energy_b_after = run_sync(client_b.call("get_energy", {}))
+    assert energy_b_after["available"] == 30
+
+    spend_b = run_sync(
+        client_b.call(
+            "spend_energy",
+            {
+                "amount": 15,
+                "reason": "client b spend",
+                "request_id": "two-clients-b",
+                "session_id": session_id,
+                "project_id": "project-b",
+            },
+        )
+    )
+    assert spend_b["success"] is True
+    assert running_server.engine.snapshot().spent == 35
+
+
 def test_for_config_reads_token_file(running_server: RunningServer) -> None:
     client = for_config(running_server.config)
     assert (
