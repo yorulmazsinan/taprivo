@@ -44,6 +44,15 @@ def test_wrong_token_is_401(running_server: RunningServer) -> None:
     assert post(running_server, Authorization="Bearer nope").status_code == 401
 
 
+def test_non_ascii_token_is_401(running_server: RunningServer) -> None:
+    # httpx2 rejects a non-ASCII `str` header value outright, so the bytes go
+    # in directly; the server must decode and reject them without raising.
+    headers = running_server.headers()
+    headers["Authorization"] = b"Bearer \xc3\xa9token"  # type: ignore[assignment]
+    response = httpx2.post(running_server.url, content=INIT, headers=headers, timeout=5)
+    assert response.status_code == 401
+
+
 def test_bad_origin_is_403(running_server: RunningServer) -> None:
     assert post(running_server, Origin="http://evil.example").status_code == 403
 

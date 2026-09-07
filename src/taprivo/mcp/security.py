@@ -34,9 +34,10 @@ class TokenBucket:
 
 
 def _header(scope: Scope, name: bytes) -> str | None:
-    for key, value in scope.get("headers", []):
+    headers: list[tuple[bytes, bytes]] = scope.get("headers", [])
+    for key, value in headers:
         if key.lower() == name:
-            return str(value.decode("latin-1"))
+            return value.decode("latin-1")
     return None
 
 
@@ -67,7 +68,7 @@ class LocalGuardMiddleware:
         max_body_bytes: int = 65536,
     ) -> None:
         self._app = app
-        self._token = token
+        self._token = token.encode("utf-8")
         self._hosts = allowed_hosts
         self._origins = allowed_origins
         self._bucket = TokenBucket(rate_per_second, burst)
@@ -91,7 +92,7 @@ class LocalGuardMiddleware:
             return
         auth = _header(scope, b"authorization") or ""
         presented = auth[7:] if auth.lower().startswith("bearer ") else ""
-        if not presented or not hmac.compare_digest(presented, self._token):
+        if not presented or not hmac.compare_digest(presented.encode("latin-1"), self._token):
             await _reply(
                 send, 401, "Unauthorized", [(b"www-authenticate", b'Bearer realm="taprivo"')]
             )
