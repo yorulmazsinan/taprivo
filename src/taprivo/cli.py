@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Coroutine
+from pathlib import Path
 from typing import Any
 
 import typer
 
 from taprivo import __version__
+from taprivo.adapters.base import Check, SetupError, SetupOptions, SetupPlan
+from taprivo.adapters.claude import ClaudeAdapter
 from taprivo.config import Config, ConfigError, load_config
 from taprivo.mcp.client import (
     ClientError,
@@ -19,6 +22,7 @@ from taprivo.mcp.client import (
     for_config,
     run_sync,
 )
+from taprivo.mcp.server import TOOL_NAMES, port_is_free
 
 app = typer.Typer(
     add_completion=False,
@@ -146,6 +150,174 @@ def stats(json_output: bool = JSON_OPTION) -> None:
     last = data["last_spend"]
     last_text = f"{last['amount']} for '{last['reason']}' at {last['at_utc']}" if last else "none"
     typer.echo(f"Spends:    {data['spend_count']} (last: {last_text})")
+
+
+setup_app = typer.Typer(help="Connect an AI coding agent to Taprivo.")
+remove_app = typer.Typer(help="Disconnect an AI coding agent from Taprivo.")
+app.add_typer(setup_app, name="setup")
+app.add_typer(remove_app, name="remove")
+
+
+def make_claude_adapter(config: Config) -> ClaudeAdapter:
+    return ClaudeAdapter(config)
+
+
+def _print_plan(plan: SetupPlan, dry_run: bool) -> None:
+    title = "Dry run: planned actions" if dry_run else "Planned actions"
+    typer.echo(f"{title}:")
+    for index, action in enumerate(plan.actions, 1):
+        typer.echo(f"  {index}. {action.description}")
+    for note in plan.notes:
+        typer.echo(f"  note: {note}")
+
+
+def _apply_plan(plan: SetupPlan) -> None:
+    for action in plan.actions:
+        try:
+            summary = action.apply()
+        except SetupError as exc:
+            fail(str(exc), False)
+        typer.echo(f"OK   {action.description}")
+        for line in summary.splitlines():
+            typer.echo(f"     {line}")
+
+
+def _setup_claude(project: bool, install_instructions: bool, dry_run: bool) -> None:
+    config = load_config_or_exit(False)
+    adapter = make_claude_adapter(config)
+    if not adapter.detect().found:
+        fail("Claude Code CLI ('claude') not found on PATH. Install Claude Code first.", False)
+    options = SetupOptions(
+        project=project, install_instructions=install_instructions, project_dir=Path.cwd()
+    )
+    plan = adapter.plan_setup(options)
+    _print_plan(plan, dry_run)
+    if dry_run:
+        return
+    _apply_plan(plan)
+    typer.echo("")
+    typer.echo("Next: start Taprivo with 'taprivo simulate', then run 'taprivo doctor'.")
+    if not install_instructions:
+        typer.echo(
+            "Optional: 'taprivo setup claude --install-instructions' adds the budget rules to "
+            "~/.claude/CLAUDE.md."
+        )
+
+
+@setup_app.command("claude")
+def setup_claude(
+    project: bool = typer.Option(False, "--project", help="Also add Taprivo to ./.mcp.json."),
+    install_instructions: bool = typer.Option(
+        False,
+        "--install-instructions",
+        help="Import the instruction file from ~/.claude/CLAUDE.md.",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show planned changes without writing."),
+) -> None:
+    """Register Taprivo with Claude Code (user scope) and write agent instructions."""
+    _setup_claude(project, install_instructions, dry_run)
+
+
+@setup_app.command("project")
+def setup_project(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show planned changes without writing."),
+) -> None:
+    """Alias for 'setup claude --project'."""
+    _setup_claude(True, False, dry_run)
+
+
+@remove_app.command("claude")
+def remove_claude(
+    project: bool = typer.Option(False, "--project", help="Also remove Taprivo from ./.mcp.json."),
+) -> None:
+    """Remove Taprivo's Claude Code registration and instruction files."""
+    config = load_config_or_exit(False)
+    adapter = make_claude_adapter(config)
+    plan = adapter.plan_remove(SetupOptions(project=project, project_dir=Path.cwd()))
+    _print_plan(plan, False)
+    _apply_plan(plan)
+
+
+def _endpoint_checks(config: Config) -> list[Check]:
+    checks: list[Check] = []
+    try:
+        names = run_sync(for_config(config).tool_names())
+    except TokenMissingError:
+        checks.append(
+            Check(
+                "endpoint",
+                "fail",
+                "no token file yet",
+                "start Taprivo once with 'taprivo simulate'",
+            )
+        )
+        return checks
+    except NotRunningError:
+        if not port_is_free(config.server.host, config.server.port):
+            checks.append(
+                Check(
+                    "endpoint",
+                    "fail",
+                    f"port {config.server.port} is bound by another process",
+                    "set server.port in config.yaml, then run 'taprivo setup claude' again",
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "endpoint", "fail", "Taprivo is not running", "start it with 'taprivo simulate'"
+                )
+            )
+        return checks
+    except UnauthorizedError:
+        checks.append(Check("endpoint", "ok", f"app reachable at {config.endpoint_url}"))
+        checks.append(
+            Check(
+                "auth",
+                "fail",
+                "stored token rejected",
+                "quit Taprivo, then run 'taprivo setup claude'",
+            )
+        )
+        return checks
+    except ClientError as exc:
+        checks.append(Check("endpoint", "fail", str(exc), "run 'taprivo simulate' and retry"))
+        return checks
+    checks.append(Check("endpoint", "ok", f"app reachable at {config.endpoint_url}"))
+    checks.append(Check("auth", "ok", "token accepted"))
+    if set(names) == set(TOOL_NAMES):
+        checks.append(Check("tools", "ok", f"{len(names)} tools listed"))
+    else:
+        checks.append(
+            Check("tools", "fail", f"unexpected tools: {sorted(names)}", "reinstall Taprivo")
+        )
+    return checks
+
+
+@app.command()
+def doctor(json_output: bool = JSON_OPTION) -> None:
+    """Diagnose the local endpoint, token and Claude Code integration."""
+    config = load_config_or_exit(json_output)
+    checks = _endpoint_checks(config) + make_claude_adapter(config).verify()
+    ok = all(check.status != "fail" for check in checks)
+    if json_output:
+        emit_json(
+            {
+                "ok": ok,
+                "checks": [
+                    {"name": c.name, "status": c.status, "detail": c.detail, "hint": c.hint}
+                    for c in checks
+                ],
+            }
+        )
+    else:
+        for check in checks:
+            line = f"{check.status.upper():4} {check.name}: {check.detail}"
+            if check.hint and check.status != "ok":
+                line += f" -> {check.hint}"
+            typer.echo(line)
+        typer.echo("All checks passed." if ok else "Some checks failed.")
+    raise typer.Exit(0 if ok else 1)
 
 
 def main() -> None:

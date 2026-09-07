@@ -176,7 +176,7 @@ def build_asgi_app(engine: EnergyEngine, config: Config, token: str) -> ASGIApp:
     )
 
 
-def _port_is_free(host: str, port: int) -> bool:
+def port_is_free(host: str, port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         try:
             sock.bind((host, port))
@@ -198,7 +198,7 @@ class McpServerThread(threading.Thread):
 
     def run(self) -> None:
         host, port = self._config.server.host, self._config.server.port
-        if not _port_is_free(host, port):
+        if not port_is_free(host, port):
             self._engine.set_mcp_status(
                 "error",
                 f"port {port} is already in use; set server.port in config.yaml and re-run "
