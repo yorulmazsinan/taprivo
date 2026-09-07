@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import socket
+import threading
 import time
 from typing import Annotated, Literal
 
+import uvicorn
 from mcp.server import MCPServer
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine, SpendRequest
 from taprivo.mcp.schemas import EnergyOut, LastSpendOut, SessionOut, SpendOut, StatsOut
+from taprivo.mcp.security import ASGIApp, LocalGuardMiddleware
 
 TOOL_NAMES = ("get_energy", "spend_energy", "get_stats", "get_session")
 
@@ -137,3 +144,98 @@ def build_server(engine: EnergyEngine, config: Config) -> MCPServer:
         )
 
     return mcp
+
+
+log = logging.getLogger(__name__)
+
+MAX_BODY_BYTES = 65536
+
+
+def build_asgi_app(engine: EnergyEngine, config: Config, token: str) -> ASGIApp:
+    port = config.server.port
+    hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    origins = {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
+    mcp = build_server(engine, config)
+    inner = mcp.streamable_http_app(
+        stateless_http=True,
+        host=config.server.host,
+        max_request_body_size=MAX_BODY_BYTES,
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=sorted(hosts),
+            allowed_origins=sorted(origins),
+        ),
+    )
+    return LocalGuardMiddleware(
+        inner,
+        token=token,
+        allowed_hosts=hosts,
+        allowed_origins=origins,
+        rate_per_second=config.server.rate_limit_per_second,
+        max_body_bytes=MAX_BODY_BYTES,
+    )
+
+
+def _port_is_free(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind((host, port))
+        except OSError:
+            return False
+    return True
+
+
+class McpServerThread(threading.Thread):
+    """Runs the loopback MCP server on its own asyncio loop."""
+
+    def __init__(self, engine: EnergyEngine, config: Config, token: str) -> None:
+        super().__init__(name="taprivo-mcp", daemon=True)
+        self._engine = engine
+        self._config = config
+        self._token = token
+        self._server: uvicorn.Server | None = None
+        self._ready = threading.Event()
+
+    def run(self) -> None:
+        host, port = self._config.server.host, self._config.server.port
+        if not _port_is_free(host, port):
+            self._engine.set_mcp_status(
+                "error",
+                f"port {port} is already in use; set server.port in config.yaml and re-run "
+                "'taprivo setup claude'",
+            )
+            self._ready.set()
+            return
+        app = build_asgi_app(self._engine, self._config, self._token)
+        self._server = uvicorn.Server(
+            uvicorn.Config(
+                app, host=host, port=port, log_level="warning", access_log=False, lifespan="on"
+            )
+        )
+        try:
+            asyncio.run(self._serve())
+        except Exception as exc:  # pragma: no cover - defensive
+            log.exception("MCP server crashed")
+            self._engine.set_mcp_status("error", str(exc))
+            self._ready.set()
+
+    async def _serve(self) -> None:
+        assert self._server is not None
+        task = asyncio.create_task(self._server.serve())
+        while not self._server.started and not task.done():
+            await asyncio.sleep(0.02)
+        if task.done() and task.exception() is not None:
+            self._engine.set_mcp_status("error", str(task.exception()))
+        else:
+            self._engine.set_mcp_status("ready")
+            log.info("MCP ready on %s", self._config.endpoint_url)
+        self._ready.set()
+        await task
+
+    def wait_ready(self, timeout: float = 5.0) -> bool:
+        return self._ready.wait(timeout)
+
+    def stop(self, timeout: float = 5.0) -> None:
+        if self._server is not None:
+            self._server.should_exit = True
+        self.join(timeout)
