@@ -26,7 +26,7 @@ from taprivo.mcp.server import TOOL_NAMES, port_is_free
 
 app = typer.Typer(
     add_completion=False,
-    no_args_is_help=True,
+    invoke_without_command=True,
     help="Taprivo: turn finger taps into a Motion Energy budget for AI coding agents.",
 )
 
@@ -79,13 +79,29 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _launch(start_simulator: bool) -> None:
+    config = load_config_or_exit(False)
+    from taprivo.ui.app import run_app  # imported lazily so CLI-only commands stay light
+
+    raise typer.Exit(run_app(config, start_simulator=start_simulator))
+
+
 @app.callback()
 def root(
+    ctx: typer.Context,
     version: bool = typer.Option(
         False, "--version", callback=_version_callback, is_eager=True, help="Show version."
     ),
 ) -> None:
-    """Taprivo command line."""
+    """Taprivo command line. Run without a subcommand to open the HUD."""
+    if ctx.invoked_subcommand is None:
+        _launch(False)
+
+
+@app.command()
+def simulate() -> None:
+    """Open the HUD with the keyboard simulator running (no camera needed)."""
+    _launch(True)
 
 
 async def _status_payload(client: LocalClient, config: Config) -> dict[str, Any]:
