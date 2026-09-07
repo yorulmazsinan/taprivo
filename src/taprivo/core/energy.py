@@ -127,19 +127,19 @@ class EnergyEngine:
 
     def spend(self, request: SpendRequest) -> SpendResult:
         with self._lock:
-            result = self._spend_locked(request)
-            snapshot = self._snapshot_locked() if result.success else None
+            result, mutated = self._spend_locked(request)
+            snapshot = self._snapshot_locked() if mutated else None
         if snapshot is not None:
             log.info("spend %d energy, %d remaining", result.spent, result.remaining)
             self._notify(snapshot)
         return result
 
-    def _spend_locked(self, request: SpendRequest) -> SpendResult:
+    def _spend_locked(self, request: SpendRequest) -> tuple[SpendResult, bool]:
         session_id = self._session.session_id
         available = self._available_locked()
 
-        def fail(error: SpendError) -> SpendResult:
-            return SpendResult(False, session_id, error=error, available=available)
+        def fail(error: SpendError) -> tuple[SpendResult, bool]:
+            return SpendResult(False, session_id, error=error, available=available), False
 
         if request.session_id != session_id:
             return fail(SpendError.SESSION_CHANGED)
@@ -158,7 +158,7 @@ class EnergyEngine:
         if previous is not None:
             previous_digest, previous_result = previous
             if previous_digest == digest:
-                return previous_result
+                return previous_result, False
             return fail(SpendError.IDEMPOTENCY_CONFLICT)
         if request.amount > available:
             return fail(SpendError.INSUFFICIENT_ENERGY)
@@ -175,7 +175,7 @@ class EnergyEngine:
         while len(self._idempotency) > IDEMPOTENCY_LIMIT:
             self._idempotency.popitem(last=False)
         self._session.record_spend(request.amount, request.reason)
-        return result
+        return result, True
 
     def reset_session(self) -> AppSnapshot:
         with self._lock:

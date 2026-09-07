@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import threading
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -124,6 +126,35 @@ def test_idempotent_replay_returns_same_transaction() -> None:
     second = spend(engine, 50, request_id="same")
     assert second == first
     assert engine.snapshot().spent == 50
+
+
+def test_idempotent_replay_does_not_notify_listeners() -> None:
+    engine = make_engine()
+    for i in range(10):
+        tap(engine, ts=i)
+    seen: list[int] = []
+    engine.subscribe(lambda s: seen.append(s.spent))
+    first = spend(engine, 50, request_id="same")
+    count_after_first = len(seen)
+    second = spend(engine, 50, request_id="same")
+    assert len(seen) == count_after_first
+    assert second == first
+
+
+def test_real_spend_logs_once_and_replay_logs_nothing(caplog: pytest.LogCaptureFixture) -> None:
+    engine = make_engine()
+    for i in range(10):
+        tap(engine, ts=i)
+    with caplog.at_level(logging.INFO, logger="taprivo.core.energy"):
+        spend(engine, 50, request_id="same", reason="do not leak this reason")
+        spend_logs = [r for r in caplog.records if "spend" in r.message]
+        assert len(spend_logs) == 1
+        assert "50" in spend_logs[0].message
+        assert "do not leak this reason" not in spend_logs[0].message
+
+        caplog.clear()
+        spend(engine, 50, request_id="same", reason="do not leak this reason")
+        assert [r for r in caplog.records if "spend" in r.message] == []
 
 
 def test_same_request_id_different_payload_conflicts() -> None:
