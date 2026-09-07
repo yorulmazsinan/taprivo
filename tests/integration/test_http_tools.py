@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import socket
+import time
 from pathlib import Path
 
 import pytest
@@ -78,3 +79,15 @@ def test_port_in_use_reports_error(taprivo_home: Path) -> None:
     finally:
         thread.stop()
         blocker.close()
+
+
+def test_stop_before_ready_returns_promptly(taprivo_home: Path) -> None:
+    config = Config(server=ServerConfig(port=free_port()))
+    engine = EnergyEngine(config)
+    thread = McpServerThread(engine, config, paths.read_or_create_token())
+    thread.start()
+    started = time.monotonic()
+    thread.stop(timeout=5.0)
+    elapsed = time.monotonic() - started
+    assert not thread.is_alive()
+    assert elapsed < 10.0

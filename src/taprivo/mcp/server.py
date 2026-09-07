@@ -236,6 +236,12 @@ class McpServerThread(threading.Thread):
         return self._ready.wait(timeout)
 
     def stop(self, timeout: float = 5.0) -> None:
+        # Bound the wait for `run()` to reach the point where `self._server`
+        # is assigned (or exit early on a port-in-use error) before deciding
+        # whether there is a server to signal. Calling stop() immediately
+        # after start(), before the thread has been scheduled, would
+        # otherwise silently skip should_exit and just time out on join().
+        self._ready.wait(timeout)
         if self._server is not None:
             self._server.should_exit = True
         self.join(timeout)

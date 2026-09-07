@@ -82,9 +82,30 @@ class _Session:
                 await self._http.__aexit__(None, None, None)
 
 
+# Total budget for the diagnostic probe below, independent of the
+# happy-path client's longer read timeout -- a failing call must not block
+# for up to 30s just to classify the failure.
+_PROBE_TIMEOUT = httpx2.Timeout(2.0)
+
+
 async def _probe_status(http: httpx2.AsyncClient, url: str) -> int | None:
     """Best-effort raw HTTP probe to recover the status code an ambiguous
     transport failure hid.
+
+    Runs only after ``Client.__aenter__`` has already failed, on the
+    existing ``http`` connection but with its own short, dedicated
+    ``_PROBE_TIMEOUT`` (2s total) so a failing ``LocalClient.call()`` cannot
+    inherit the happy-path ``Timeout(5.0, read=30.0)`` and block for up to
+    ~60s. Its result reflects server state at probe time, a moment after
+    the original request -- it is not a replay of that request, does not
+    confirm anything about the original request's body (it sends a minimal
+    placeholder body, so it cannot confirm a 413), and any exception raised
+    while probing is swallowed and reported as ``None``. Callers must treat
+    the result as an inference, not a fact: only a 401 is acted on directly
+    (see ``_translate``); every other status, including ``None``, falls
+    through to the existing text/type heuristics. The probe never logs or
+    includes the bearer token in any returned value or error message -- it
+    only returns a bare status code.
 
     The streamable-HTTP client collapses every HTTP-level 4xx rejection whose
     body is not a JSON-RPC error (our security middleware replies with plain
@@ -95,7 +116,7 @@ async def _probe_status(http: httpx2.AsyncClient, url: str) -> int | None:
     can only be recovered by asking the server again directly.
     """
     try:
-        response = await http.post(url, content=b"{}")
+        response = await http.post(url, content=b"{}", timeout=_PROBE_TIMEOUT)
     except Exception:
         return None
     return response.status_code
