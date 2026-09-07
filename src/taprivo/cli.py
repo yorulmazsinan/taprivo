@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import typer
 
@@ -38,7 +38,7 @@ def emit_json(payload: dict[str, Any]) -> None:
     typer.echo(json.dumps({"schema_version": 1, **payload}, indent=2, sort_keys=True))
 
 
-def fail(message: str, json_output: bool, code: int = 1) -> None:
+def fail(message: str, json_output: bool, code: int = 1) -> NoReturn:
     if json_output:
         emit_json({"ok": False, "error": message})
     else:
@@ -51,7 +51,6 @@ def load_config_or_exit(json_output: bool) -> Config:
         return load_config()
     except ConfigError as exc:
         fail(str(exc), json_output, code=2)
-        raise AssertionError("unreachable") from exc
 
 
 def query(
@@ -70,7 +69,6 @@ def query(
         fail("The stored token was rejected. Quit Taprivo and run 'taprivo doctor'.", json_output)
     except ClientError as exc:
         fail(str(exc), json_output)
-    raise AssertionError("unreachable")
 
 
 def _version_callback(value: bool) -> None:
