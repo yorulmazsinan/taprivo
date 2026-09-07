@@ -11,7 +11,7 @@ each under its own license. Distributions of Taprivo must keep these notices.
 | Typer, Click | MIT, BSD-3-Clause | |
 | uvicorn, Starlette | BSD-3-Clause | |
 | PyYAML | MIT | |
-| httpx2 (via `mcp`) | BSD-3-Clause | |
+| httpx2 | BSD-3-Clause | |
 
 Development-only tools (pytest, pytest-qt, hypothesis, Ruff, mypy) are not
 distributed with Taprivo. Run `uv pip list` in the project environment for the

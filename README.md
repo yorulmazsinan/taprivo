@@ -5,9 +5,10 @@
 [Türkçe README](README.tr.md)
 
 Taprivo turns finger taps into a playful work budget for AI coding agents.
-Track your hand locally, build Motion Energy, and let Claude Code read and
-spend it through MCP. Camera frames stay on your device. Motion Energy is a
-game mechanic, not API tokens or credits.
+Tap your fingers, build Motion Energy, and let Claude Code read and spend it
+through MCP. Hand tracking will run locally on your device; this release
+ships the keyboard simulator. Camera frames stay on your device. Motion
+Energy is a game mechanic, not API tokens or credits.
 
 > **Status: alpha (0.1.0a1).** This release ships the camera-free keyboard
 > simulator, the HUD and the MCP server. Camera-based tap detection is in
@@ -85,6 +86,7 @@ files and blocks Taprivo added.
 | Command | What it does |
 |---|---|
 | `taprivo` | Open the HUD |
+| `taprivo --version` | Print the version |
 | `taprivo simulate` | Open the HUD with the keyboard simulator running |
 | `taprivo status [--json]` | Balance, tracking state and endpoint of the running app |
 | `taprivo stats [--json]` | Session statistics |

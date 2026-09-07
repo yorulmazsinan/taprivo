@@ -5,8 +5,9 @@
 [English README](README.md)
 
 Taprivo, parmak vuruşlarını AI kodlama ajanları için oyunlaştırılmış bir iş
-bütçesine dönüştürür. El takibi cihazınızda yapılır, Motion Energy birikir ve
-Claude Code bu bakiyeyi MCP üzerinden okuyup harcayabilir. Kamera kareleri
+bütçesine dönüştürür. Parmaklarınızla vurun, Motion Energy biriktirin ve
+Claude Code bu bakiyeyi MCP üzerinden okuyup harcasın. El takibi cihazınızda
+yerel olarak çalışacak; bu sürüm klavye simülatörünü içerir. Kamera kareleri
 cihazınızdan çıkmaz. Motion Energy bir oyun mekaniğidir; API token'ı veya
 kredi değildir.
 
@@ -85,6 +86,7 @@ dosya ve blokları kaldırır.
 | Komut | İşlev |
 |---|---|
 | `taprivo` | HUD'u aç |
+| `taprivo --version` | Sürümü yazdır |
 | `taprivo simulate` | HUD'u klavye simülatörü açık olarak başlat |
 | `taprivo status [--json]` | Çalışan uygulamanın bakiyesi, takip durumu ve uç noktası |
 | `taprivo stats [--json]` | Oturum istatistikleri |

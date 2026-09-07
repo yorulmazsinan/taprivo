@@ -19,3 +19,8 @@ a new patch release with a changelog entry.
 Taprivo listens only on loopback and requires a per-user bearer token. It does
 not claim isolation from malicious processes running as the same user; the
 goal is to block browser-originated requests and accidental exposure.
+
+During `taprivo setup claude`, the bearer token is passed to the `claude` CLI
+as a command-line argument so it can be stored in Claude Code's user-private
+configuration; on macOS, process arguments are visible to other processes
+running as the same user.

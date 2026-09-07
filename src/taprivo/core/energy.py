@@ -247,6 +247,8 @@ class EnergyEngine:
         )
 
     def _notify(self, snapshot: AppSnapshot) -> None:
+        # Notifications from concurrent mutations may be delivered out of
+        # order; listeners (e.g. the HUD) self-correct on the next snapshot.
         with self._lock:
             listeners = list(self._listeners)
         for listener in listeners:

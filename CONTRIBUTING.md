@@ -28,6 +28,8 @@ uv run mypy
 - Keep camera frames, landmarks, tokens and private paths out of logs, tests
   and issues. Raw camera recordings are never required for a contribution.
 - `core/` stays free of Qt and MCP imports.
+- `src/taprivo/ui/app.py` is the composition root and the only `ui/` module
+  allowed to import from `mcp/`; `mcp/` never imports `ui/`.
 - Public contract changes (CLI JSON, MCP schemas, config keys) need a note in
   `CHANGELOG.md` and, for anything non-additive, an issue labelled `rfc`.
 - Contributions are accepted under the project's Apache-2.0 license. Tool-assisted
