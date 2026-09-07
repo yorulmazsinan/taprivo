@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ipaddress
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -41,13 +40,8 @@ class ServerConfig(_Frozen):
     @field_validator("host")
     @classmethod
     def _loopback_only(cls, value: str) -> str:
-        if value == "localhost":
+        if value in ("127.0.0.1", "localhost"):
             return value
-        try:
-            if ipaddress.ip_address(value).is_loopback:
-                return value
-        except ValueError:
-            pass
         raise ValueError("server.host must be a loopback address (127.0.0.1 or localhost)")
 
 

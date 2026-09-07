@@ -39,6 +39,22 @@ def test_non_loopback_host_rejected(taprivo_home: Path) -> None:
         load_config()
 
 
+@pytest.mark.parametrize("host", ["::1", "127.0.0.2"])
+def test_other_loopback_addresses_rejected(taprivo_home: Path, host: str) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text(f"server:\n  host: {host}\n")
+    with pytest.raises(ConfigError, match="loopback"):
+        load_config()
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost"])
+def test_accepted_hosts_pass(taprivo_home: Path, host: str) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text(f"server:\n  host: {host}\n")
+    cfg = load_config()
+    assert cfg.server.host == host
+
+
 def test_config_is_frozen(taprivo_home: Path) -> None:
     cfg = load_config()
     with pytest.raises(ValidationError):
