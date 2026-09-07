@@ -128,6 +128,7 @@ class HudWindow(QWidget):
         snapshot = self._pending
         if snapshot is None:
             return
+        self._pending = None
         self._latest = snapshot
         self.energy_label.setText(f"{snapshot.available} / {snapshot.max_energy}")
         self.bar.setValue(snapshot.available)
