@@ -27,3 +27,17 @@ def test_duration_and_ids() -> None:
     session = Session(now_ms=lambda: 5_000, mode="simulator")
     assert len(session.session_id) == 32
     assert session.duration_seconds(65_000) == 60
+
+
+def test_tap_exactly_sixty_seconds_old_is_pruned() -> None:
+    session = Session(now_ms=lambda: 0, mode="simulator")
+    session.record_tap(Finger.INDEX, 0)
+    session.record_tap(Finger.INDEX, 1)
+    assert session.taps_per_minute(59_999) == 2
+    assert session.taps_per_minute(60_000) == 1
+    assert session.taps_per_minute(60_001) == 0
+
+
+def test_duration_never_negative() -> None:
+    session = Session(now_ms=lambda: 5_000, mode="simulator")
+    assert session.duration_seconds(1_000) == 0

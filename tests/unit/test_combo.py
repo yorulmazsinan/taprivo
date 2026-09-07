@@ -26,3 +26,10 @@ def test_reset() -> None:
     combo.record(0)
     combo.reset()
     assert combo.count == 0
+
+
+def test_gap_exactly_at_timeout_still_counts() -> None:
+    combo = ComboTracker(timeout_ms=600, enabled=True)
+    assert combo.record(0) == 1
+    assert combo.record(600) == 2
+    assert combo.record(1201) == 1
