@@ -4,7 +4,7 @@ version = "0.1.0a1"
 description = "Turn finger taps into a playful Motion Energy budget for AI coding agents."
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.12,<3.14"
 authors = [{ name = "Sinan Yorulmaz" }]
 keywords = ["mcp", "claude-code", "hand-tracking", "developer-tools", "macos"]
 classifiers = [
