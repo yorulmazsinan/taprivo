@@ -48,9 +48,13 @@ def read_or_create_token() -> str:
     if path.exists():
         return path.read_text(encoding="utf-8").strip()
     token = secrets.token_urlsafe(TOKEN_BYTES)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        fh.write(token + "\n")
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(token + "\n")
+    except FileExistsError:
+        # Another process won the race; read the token they created
+        return path.read_text(encoding="utf-8").strip()
     return token
 
 
