@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from taprivo.adapters.base import (
     backup,
     merge_mcp_server,
@@ -30,6 +32,15 @@ def test_remove_block_keeps_other_content() -> None:
     text = f"before\n\n{S}\n@x\n{E}\nafter\n"
     assert remove_block(text, S, E) == "before\n\nafter\n"
     assert remove_block("untouched\n", S, E) == "untouched\n"
+
+
+@pytest.mark.parametrize("t", ["", "# Notes\n", "# Notes\n\n", "a\n\nb\n", "a\nb\n\n\n"])
+def test_upsert_then_remove_block_round_trips(t: str) -> None:
+    assert remove_block(upsert_block(t, "@x", S, E), S, E) == t
+
+
+def test_upsert_then_remove_block_adds_missing_trailing_newline() -> None:
+    assert remove_block(upsert_block("# Notes", "@x", S, E), S, E) == "# Notes\n"
 
 
 def test_merge_and_remove_mcp_server_preserve_others() -> None:

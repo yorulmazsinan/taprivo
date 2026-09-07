@@ -97,8 +97,8 @@ def upsert_block(text: str, body: str, start: str, end: str) -> str:
         return text[:begin] + block + text[finish_end:]
     if not text:
         return block
-    separator = "" if text.endswith("\n\n") else ("\n" if text.endswith("\n") else "\n\n")
-    return text + separator + block
+    base = text if text.endswith("\n") else text + "\n"
+    return base + "\n" + block
 
 
 def remove_block(text: str, start: str, end: str) -> str:
@@ -113,7 +113,7 @@ def remove_block(text: str, start: str, end: str) -> str:
         finish_end += 1
     head = text[:begin]
     tail = text[finish_end:]
-    if not tail and head.endswith("\n\n"):
+    if not tail and head.endswith("\n"):
         head = head[:-1]
     return head + tail
 
