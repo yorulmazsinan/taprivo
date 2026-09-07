@@ -97,7 +97,7 @@ dosya ve blokları kaldırır.
 ## Yapılandırma
 
 Kullanıcı ayarları `~/.config/taprivo/config.yaml` dosyasında tutulur ve paketle
-gelen varsayılanların (`src/taprivo/resources/default.yaml`) üzerine yazılır.
+gelen varsayılanlarla (`src/taprivo/resources/default.yaml`) birleştirilir; kullanıcı değerleri öncelik kazanır.
 
 ```yaml
 energy:
@@ -123,7 +123,33 @@ değiştirmez.
 - Kamera kareleri (kamera desteği geldiğinde) bellekte işlenir; kaydedilmez,
   yüklenmez, MCP'ye açılmaz.
 - Telemetri yoktur. Tek ağ dinleyicisi yerel uç noktadır.
-- Loglar düşük hacimlidir; token'ı veya harcama gerekçelerini tam olarak içermez.
+- Loglar düşük hacimlidir; token'ı hiçbir zaman, harcama gerekçelerini ise tam metin olarak içermez.
+
+## Mimari
+
+```
+Klavye simülatörü / (planlanan) kamera
+  → TapEvent
+  → EnergyEngine (tek kilit, atomik harcama, idempotency)
+      ├─ HUD (PySide6)
+      └─ MCP sunucusu (Streamable HTTP, loopback, bearer token)
+           ├─ Claude Code projesi A
+           └─ Claude Code projesi B
+```
+
+## Destek matrisi
+
+| Alan | Durum |
+|---|---|
+| Klavye simülatörü | uygulandı |
+| HUD | uygulandı |
+| MCP araçları ve Claude Code kurulumu | uygulandı |
+| Kamerayla vuruş algılama | geliştiriliyor |
+| İki el, ritim, combo bonusları | planlandı |
+| Kalıcı istatistikler (SQLite) | planlandı |
+| Diğer ajanlar (Cursor, Codex, …) | planlandı |
+
+Bkz. [ROADMAP.md](ROADMAP.md).
 
 ## Katkı
 
