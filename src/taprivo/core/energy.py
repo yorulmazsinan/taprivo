@@ -81,6 +81,8 @@ class EnergyEngine:
         self._mcp: McpStatus = "starting"
         self._mcp_error: str | None = None
         self._last_tool_call_utc: datetime | None = None
+        self._camera_fps = 0.0
+        self._detection_ratio = 0.0
         self._start_session_locked()
 
     # -- session lifecycle -------------------------------------------------
@@ -200,6 +202,13 @@ class EnergyEngine:
             snapshot = self._snapshot_locked()
         self._notify(snapshot)
 
+    def set_camera_stats(self, fps: float, detection_ratio: float) -> None:
+        with self._lock:
+            self._camera_fps = round(fps, 1)
+            self._detection_ratio = round(detection_ratio, 3)
+            snapshot = self._snapshot_locked()
+        self._notify(snapshot)
+
     def mark_tool_call(self) -> None:
         with self._lock:
             self._last_tool_call_utc = datetime.now(UTC)
@@ -244,6 +253,8 @@ class EnergyEngine:
             mcp_error=self._mcp_error,
             last_tool_call_utc=self._last_tool_call_utc,
             session_duration_seconds=self._session.duration_seconds(now),
+            camera_fps=self._camera_fps,
+            detection_ratio=self._detection_ratio,
         )
 
     def _notify(self, snapshot: AppSnapshot) -> None:

@@ -27,6 +27,7 @@ TRACKING_TEXT = {
     "simulator": "Simulator running",
     "tracking": "Tracking",
     "stale": "Stale (disconnected)",
+    "no_signal": "No signal",
 }
 MCP_TEXT = {"starting": "Starting", "ready": "Ready", "error": "Error"}
 

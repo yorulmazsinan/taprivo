@@ -64,6 +64,11 @@ def test_reduced_motion_renders(reduced_motion_hud: HudBundle, qtbot: QtBot) -> 
     assert hud_module.REDUCED_MOTION_STYLE in reduced_motion_hud.window.bar.styleSheet()
 
 
+def test_no_signal_status_text(hud: HudBundle, qtbot: QtBot) -> None:
+    hud.engine.set_tracking("no_signal")
+    qtbot.waitUntil(lambda: "No signal" in hud.window.tracking_label.text(), timeout=2000)
+
+
 def test_auto_repeat_is_ignored(hud: HudBundle) -> None:
     from PySide6.QtCore import QEvent, Qt
     from PySide6.QtGui import QKeyEvent

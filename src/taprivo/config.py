@@ -56,6 +56,25 @@ class HudConfig(_Frozen):
     reduced_motion: bool = False
 
 
+class CameraConfig(_Frozen):
+    device_index: int | None = Field(default=None, ge=0)
+    width: int = Field(default=640, ge=160, le=4096)
+    height: int = Field(default=480, ge=120, le=4096)
+    preview_fps: int = Field(default=15, ge=1, le=60)
+
+
+class DetectorConfig(_Frozen):
+    smoothing_alpha: float = Field(default=0.4, gt=0, le=1)
+    baseline_alpha: float = Field(default=0.03, gt=0, le=1)
+    threshold: float = Field(default=0.22, gt=0, le=1)
+    release_ratio: float = Field(default=0.4, gt=0, lt=1)
+    max_cycle_ms: int = Field(default=600, ge=50)
+    cooldown_ms: int = Field(default=140, ge=0)
+    attribution_window_ms: int = Field(default=120, ge=0)
+    reacquire_guard_ms: int = Field(default=300, ge=0)
+    frame_gap_reset_ms: int = Field(default=250, ge=50)
+
+
 class Config(_Frozen):
     schema_version: int = 1
     energy: EnergyConfig = Field(default_factory=EnergyConfig)
@@ -63,6 +82,8 @@ class Config(_Frozen):
     server: ServerConfig = Field(default_factory=ServerConfig)
     simulator: SimulatorConfig = Field(default_factory=SimulatorConfig)
     hud: HudConfig = Field(default_factory=HudConfig)
+    camera: CameraConfig = Field(default_factory=CameraConfig)
+    detector: DetectorConfig = Field(default_factory=DetectorConfig)
 
     @property
     def endpoint_url(self) -> str:
