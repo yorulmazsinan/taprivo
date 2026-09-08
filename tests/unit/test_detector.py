@@ -68,8 +68,9 @@ def test_frame_gap_resets_and_reacquire_is_guarded() -> None:
     # a pulse immediately after re-acquisition falls inside the 300 ms guard
     events += run(detector, pulse(1100, Finger.INDEX, 0.5), tail_ms=400)
     assert events == []
-    # after the guard, taps count again
-    later = run(detector, flat(1500, 400) + pulse(1900, Finger.INDEX, 0.5))
+    # after the guard, taps count again (start after the previous run()'s settling
+    # tail, which reaches 1780 ms, so frame timestamps stay non-decreasing)
+    later = run(detector, flat(1800, 400) + pulse(2200, Finger.INDEX, 0.5))
     assert [e.finger for e in later] == [Finger.INDEX]
 
 
@@ -111,6 +112,30 @@ def test_state_exposes_deviation_and_phase() -> None:
     assert state.guarded is False
     assert set(state.fingers) == set(Finger)
     assert state.fingers[Finger.INDEX].phase == "idle"
+
+
+def test_reset_clears_cooldown() -> None:
+    # With default params (reacquire_guard_ms=300 > cooldown_ms=140), any tap after a
+    # reset()-forced re-acquisition necessarily lands well outside the old cooldown
+    # window regardless of whether the stale per-finger timestamp was cleared, so it
+    # cannot distinguish fixed from buggy behaviour. Use an elevated cooldown_ms (all
+    # other params default) so a stale `_last_event_ts` would still be able to
+    # suppress the next legitimate tap if reset() failed to clear it.
+    params = DetectorParams(cooldown_ms=5000)
+    detector = TapDetector(params, lambda: "sess-1")
+    first = warm() + pulse(600, Finger.INDEX, 0.4)
+    events = run(detector, first)
+    assert [e.finger for e in events] == [Finger.INDEX]
+
+    detector.reset()
+
+    # Keep frame timestamps increasing across the two run() calls (see vision_helpers.run).
+    last = first[-1].ts_ms
+    tail = list(range(last + 40, last + 400, 40))
+    t0 = tail[-1] + 40
+
+    second = run(detector, flat(t0, 400) + pulse(t0 + 400, Finger.INDEX, 0.5))
+    assert [e.finger for e in second] == [Finger.INDEX]
 
 
 def test_recorded_replay_is_deterministic_and_pinned() -> None:
