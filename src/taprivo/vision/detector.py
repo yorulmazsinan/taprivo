@@ -81,7 +81,6 @@ class TapDetector:
         self._tracks = {f: _Track(threshold=given.get(f, params.threshold)) for f in Finger}
         self._hand_id: str | None = None
         self._last_frame_ts: int | None = None
-        self._last_seen_ts: int | None = None
         self._guard_until = -1
         self._pending: list[TapCandidate] = []
         self._last_event_ts: dict[Finger, int] = {f: -(10**9) for f in Finger}
@@ -104,6 +103,7 @@ class TapDetector:
         self._pending.clear()
         self._hand_id = None
         self._last_frame_ts = None
+        self._last_event_ts = {f: -(10**9) for f in Finger}
 
     # -- processing ----------------------------------------------------------
 

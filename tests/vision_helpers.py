@@ -7,6 +7,7 @@ import random
 from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
+from weakref import WeakKeyDictionary
 
 from taprivo.core.events import Finger, Hand, TapEvent
 from taprivo.vision.detector import DetectorParams, TapDetector
@@ -14,6 +15,11 @@ from taprivo.vision.features import compute_features
 from taprivo.vision.frames import FingerFeatures, HandFrame
 
 DUMMY_LANDMARKS = tuple((0.5, 0.5, 0.0) for _ in range(21))
+
+# Last frame timestamp actually fed to each detector via run(), across calls, so
+# chained run() calls on the same detector can be checked for non-decreasing
+# timestamps too (see run() below).
+_LAST_FED_TS: WeakKeyDictionary[TapDetector, int] = WeakKeyDictionary()
 
 
 def hand_frame(
@@ -77,8 +83,18 @@ def run(detector: TapDetector, frames: Iterable[HandFrame], tail_ms: int = 400) 
     events: list[TapEvent] = []
     last = 0
     last_frame: HandFrame | None = None
+    prior = _LAST_FED_TS.get(detector)
+
+    def feed(frame: HandFrame | None, ts_ms: int) -> None:
+        nonlocal prior
+        if prior is not None and ts_ms < prior:
+            raise AssertionError("non-monotonic frame timestamps in test input")
+        prior = ts_ms
+        _LAST_FED_TS[detector] = ts_ms
+        events.extend(detector.process(frame, ts_ms))
+
     for frame in frames:
-        events.extend(detector.process(frame, frame.ts_ms))
+        feed(frame, frame.ts_ms)
         last = frame.ts_ms
         last_frame = frame
     # Hold the hand still at its last observed pose so in-flight excursions can
@@ -86,7 +102,7 @@ def run(detector: TapDetector, frames: Iterable[HandFrame], tail_ms: int = 400) 
     # attribution window, without inventing new motion.
     for ts in range(last + 40, last + tail_ms, 40):
         held = None if last_frame is None else replace(last_frame, ts_ms=ts)
-        events.extend(detector.process(held, ts))
+        feed(held, ts)
     return events
 
 
