@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import csv
 import logging
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Slot
-from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
+from PySide6.QtGui import QCloseEvent, QColor, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -28,9 +29,8 @@ from taprivo.config import Config
 from taprivo.core.events import Finger
 from taprivo.ui.vision_bridge import PreviewPacket, VisionSignals, make_preview_callback
 from taprivo.vision.calibration import CalibrationResult, CalibrationSession
-from taprivo.vision.camera import CameraDevice, CameraError, default_device, list_devices
+from taprivo.vision.camera import CameraDevice, default_device, list_devices
 from taprivo.vision.controller import VisionController
-from taprivo.vision.tracker import ModelError
 
 log = logging.getLogger(__name__)
 
@@ -82,11 +82,13 @@ class CameraWindow(QWidget):
         self._config = config
         self._devices_fn = devices_fn
         self._devices: list[CameraDevice] = []
+        self._refreshing = False
         self._session: CalibrationSession | None = None
         self._result: CalibrationResult | None = None
         self._last_error = ""
         self.signals = signals
         self.signals.preview.connect(self.on_preview, Qt.ConnectionType.QueuedConnection)
+        self.signals.devices.connect(self.on_devices, Qt.ConnectionType.QueuedConnection)
         self.setWindowTitle("Taprivo Camera")
 
         self.device_combo = QComboBox()
@@ -171,7 +173,33 @@ class CameraWindow(QWidget):
 
     @Slot()
     def refresh_devices(self) -> None:
-        self._devices = self._devices_fn()
+        if self._refreshing:
+            return
+        self._refreshing = True
+        self.refresh_button.setEnabled(False)
+        self.start_button.setEnabled(False)
+        self.device_combo.clear()
+        self.device_combo.addItem("Refreshing…")
+        self.device_combo.setEnabled(False)
+        devices_fn = self._devices_fn
+        signals = self.signals
+
+        def probe() -> None:
+            try:
+                devices = devices_fn()
+            except Exception:
+                log.exception("device probing failed")
+                devices = []
+            signals.devices.emit(devices)
+
+        threading.Thread(target=probe, name="taprivo-camera-probe", daemon=True).start()
+
+    @Slot(object)
+    def on_devices(self, devices: object) -> None:
+        if not isinstance(devices, list):
+            return
+        self._devices = devices
+        self.device_combo.setEnabled(True)
         self.device_combo.clear()
         for device in self._devices:
             self.device_combo.addItem(device.label, device.index)
@@ -181,6 +209,8 @@ class CameraWindow(QWidget):
         )
         if chosen is not None:
             self.device_combo.setCurrentIndex(self._devices.index(chosen))
+        self._refreshing = False
+        self.refresh_button.setEnabled(True)
         self.start_button.setEnabled(bool(self._devices) and not self._controller.running)
 
     def selected_device_index(self) -> int | None:
@@ -191,13 +221,16 @@ class CameraWindow(QWidget):
 
     @Slot()
     def start_camera(self) -> None:
+        if self._refreshing:
+            return
         index = self.selected_device_index()
         if index is None:
             return
         self._last_error = ""
         try:
             self._controller.start(index, preview=make_preview_callback(self.signals))
-        except (CameraError, ModelError) as exc:
+        except Exception as exc:
+            log.exception("failed to start camera")
             self._last_error = str(exc)
             QMessageBox.warning(self, "Camera", str(exc))
         self._render_status()
@@ -309,20 +342,30 @@ class CameraWindow(QWidget):
 
     def _render_status(self) -> None:
         running = self._controller.running
-        self.start_button.setEnabled(bool(self._devices) and not running)
+        self.start_button.setEnabled(bool(self._devices) and not running and not self._refreshing)
         self.stop_button.setEnabled(running)
         self.calibrate_button.setEnabled(running)
         self.status_label.setText(self.status_text())
 
     def _tick(self) -> None:
-        self._render_status()
-        session = self._session
-        if session is None:
-            return
-        prompt = session.prompt(self._controller.now_ms())
-        self.prompt_label.setText(prompt.text)
-        self.countdown_label.setText(
-            f"{prompt.remaining_ms / 1000:.1f} s" if prompt.remaining_ms else ""
-        )
-        if session.finished and self._result is None and session.result() is not None:
-            self.show_result(session.result())  # type: ignore[arg-type]
+        try:
+            self._render_status()
+            session = self._session
+            if session is None:
+                return
+            prompt = session.prompt(self._controller.now_ms())
+            self.prompt_label.setText(prompt.text)
+            self.countdown_label.setText(
+                f"{prompt.remaining_ms / 1000:.1f} s" if prompt.remaining_ms else ""
+            )
+            if session.finished and self._result is None:
+                result = session.result()
+                if result is not None:
+                    self.show_result(result)
+        except Exception:
+            log.exception("camera window tick failed")
+
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 (Qt override)
+        self._timer.stop()
+        self.stop_camera()
+        super().closeEvent(event)

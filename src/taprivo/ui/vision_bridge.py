@@ -21,6 +21,7 @@ class PreviewPacket:
 
 class VisionSignals(QObject):
     preview = Signal(object)
+    devices = Signal(object)
 
 
 def _to_qimage(frame: Frame) -> QImage:
