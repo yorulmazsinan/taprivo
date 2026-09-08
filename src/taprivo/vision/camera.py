@@ -100,6 +100,8 @@ class CameraSource:
         return self._capture is not None
 
     def open(self) -> None:
+        if self._capture is not None:
+            self.close()
         capture = self._factory(self._index)
         if not capture.isOpened():
             capture.release()

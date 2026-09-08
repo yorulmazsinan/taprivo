@@ -6,6 +6,7 @@ import pytest
 from taprivo.vision.camera import (
     DARK_MEAN,
     NO_SIGNAL_FRAMES,
+    CameraDevice,
     CameraError,
     CameraSource,
     default_device,
@@ -73,19 +74,26 @@ def test_list_devices_probes_signal_and_labels() -> None:
         1: FakeCapture(bright(5)),
         2: FakeCapture([], opened=False),
     }
-    devices = list_devices(lambda i: captures.get(i, FakeCapture([], opened=False)), max_index=2)
+    devices = list_devices(lambda i: captures[i], max_index=2)
     assert [d.index for d in devices] == [0, 1]
     assert devices[0].has_signal is False and "no signal" in devices[0].label
     assert devices[1].has_signal is True and devices[1].label == "Camera 1 (640x480)"
-    assert all(c.released for i, c in captures.items() if i < 2)
+    assert all(c.released for c in captures.values())
     assert default_device(devices) == devices[1]
     assert default_device([]) is None
 
 
+def test_list_devices_falls_back_to_frame_shape() -> None:
+    devices = list_devices(lambda i: FakeCapture(bright(5), size=(0, 0)), max_index=0)
+    assert devices == [CameraDevice(0, "Camera 0 (640x480)", 640, 480, True)]
+
+
 def test_open_failure_raises_camera_error() -> None:
-    source = CameraSource(3, factory=lambda i: FakeCapture([], opened=False))
+    capture = FakeCapture([], opened=False)
+    source = CameraSource(3, factory=lambda i: capture)
     with pytest.raises(CameraError, match="permission"):
         source.open()
+    assert capture.released is True
 
 
 def test_read_returns_frames_with_monotonic_timestamps() -> None:
@@ -131,3 +139,16 @@ def test_requested_size_is_applied() -> None:
     CameraSource(1, width=320, height=240, factory=lambda i: capture).open()
     assert capture.props[cv2.CAP_PROP_FRAME_WIDTH] == 320
     assert capture.props[cv2.CAP_PROP_FRAME_HEIGHT] == 240
+
+
+def test_reopen_releases_previous_capture() -> None:
+    captures = [FakeCapture(bright(1)), FakeCapture(bright(1))]
+    factory_calls = iter(captures)
+    source = CameraSource(0, factory=lambda i: next(factory_calls))
+    source.open()
+    source.open()
+    assert captures[0].released is True
+    assert captures[1].released is False
+    assert source.is_open is True
+    source.close()
+    assert captures[1].released is True
