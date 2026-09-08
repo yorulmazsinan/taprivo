@@ -29,11 +29,11 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
-      - name: Install Qt runtime libraries (Linux)
+      - name: Install Qt and MediaPipe runtime libraries (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 libglib2.0-0
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 libglib2.0-0 libgles2
       - name: Report runner architecture
         run: uname -m
       - name: Sync
