@@ -25,6 +25,8 @@ def test_mediapipe_binaries_have_no_telemetry_markers() -> None:
     for binary in binaries:
         data = binary.read_bytes()
         hits = [m.decode() for m in MARKERS if m in data]
-        if hits:
-            msg = f"{binary.name} contains telemetry markers {hits}"
-            raise AssertionError(msg)
+        msg = (
+            f"{binary.name} contains telemetry markers {hits}; "
+            "keep mediapipe pinned to a telemetry-free release"
+        )
+        assert not hits, msg
