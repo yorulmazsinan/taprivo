@@ -8,10 +8,21 @@ from typer.testing import CliRunner
 
 from taprivo import cli, paths
 from taprivo.adapters.claude import ClaudeAdapter
+from taprivo.vision.camera import CameraDevice
 from tests.integration.conftest import RunningServer, free_port
 from tests.unit.test_claude_adapter import FakeClaude
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _stub_camera(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests exercise the endpoint/auth/Claude checks, not real camera
+    hardware; stub the camera hooks so results don't depend on the machine."""
+    monkeypatch.setattr(
+        cli, "list_devices_fn", lambda: [CameraDevice(0, "Camera 0 (640x480)", 640, 480, True)]
+    )
+    monkeypatch.setattr(cli, "camera_probe_fn", lambda config: (True, "read a frame from camera 0"))
 
 
 @pytest.fixture

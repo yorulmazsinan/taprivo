@@ -121,3 +121,10 @@ async def test_get_stats_and_session(engine: EnergyEngine, simulator: Simulator)
     assert session["mode"] == "simulator"
     assert session["tracking"] == "simulator"
     assert session["mcp_uptime_seconds"] >= 0
+
+
+async def test_get_session_reports_camera_stats(engine: EnergyEngine) -> None:
+    engine.set_camera_stats(21.4, 0.9)
+    session = await call(engine, "get_session")
+    assert session["camera_fps"] == 21.4
+    assert session["detection_ratio"] == 0.9
