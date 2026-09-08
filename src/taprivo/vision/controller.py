@@ -15,12 +15,14 @@ from taprivo.vision.frames import FrameStats
 from taprivo.vision.tracker import HandTracker, MediaPipeHandTracker
 from taprivo.vision.worker import PreviewCallback, VisionWorker
 
-SourceFactory = Callable[[int, Config], CameraSource]
+SourceFactory = Callable[[int, Config, Callable[[], int]], CameraSource]
 TrackerFactory = Callable[[], HandTracker]
 
 
-def default_source_factory(index: int, config: Config) -> CameraSource:
-    return CameraSource(index, width=config.camera.width, height=config.camera.height)
+def default_source_factory(index: int, config: Config, now_ms: Callable[[], int]) -> CameraSource:
+    return CameraSource(
+        index, width=config.camera.width, height=config.camera.height, now_ms=now_ms
+    )
 
 
 class VisionController:
@@ -82,7 +84,7 @@ class VisionController:
         worker = VisionWorker(
             self._engine,
             self._detector,
-            lambda: self._source_factory(device_index, self._config),
+            lambda: self._source_factory(device_index, self._config, self._now_ms),
             self._tracker_factory,
             preview=preview,
             preview_fps=self._config.camera.preview_fps,
@@ -115,12 +117,20 @@ class VisionController:
         return session
 
     def apply_calibration(self, result: CalibrationResult) -> None:
-        self._detector.set_thresholds(result.thresholds)
-        if self._worker is not None:
+        if self.running and self._worker is not None:
+            self._worker.apply_thresholds(result.thresholds)
             self._worker.set_calibration(None)
+        else:
+            self._detector.set_thresholds(result.thresholds)
 
     def thresholds(self) -> dict[Finger, float]:
+        if self.running and self._worker is not None:
+            return self._worker.thresholds()
         return self._detector.thresholds()
 
     def reset_thresholds(self) -> None:
-        self._detector.set_thresholds({f: self._params.threshold for f in Finger})
+        defaults = {f: self._params.threshold for f in Finger}
+        if self.running and self._worker is not None:
+            self._worker.apply_thresholds(defaults)
+        else:
+            self._detector.set_thresholds(defaults)
