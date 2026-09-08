@@ -5,6 +5,9 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- Pin mediapipe to 0.10.33; a test fails if the installed wheel contains telemetry code.
+
 ## [0.1.0a1] - 2026-09-08
 
 Developer preview. Install from source with `uv sync`; there is no signed
