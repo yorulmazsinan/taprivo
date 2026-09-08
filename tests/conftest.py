@@ -1,6 +1,7 @@
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ.setdefault("GLOG_minloglevel", "2")  # silence absl/TFLite logging before mediapipe loads
 
 import logging
 from collections.abc import Iterator
