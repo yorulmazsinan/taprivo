@@ -239,6 +239,19 @@ def test_concurrent_spends_never_overspend() -> None:
 Op = tuple[str, int]
 
 
+def test_camera_stats_and_no_signal_status() -> None:
+    engine = make_engine()
+    seen: list[float] = []
+    engine.subscribe(lambda s: seen.append(s.camera_fps))
+    engine.set_camera_stats(21.5, 0.93)
+    engine.set_tracking("no_signal")
+    snap = engine.snapshot()
+    assert snap.camera_fps == 21.5
+    assert snap.detection_ratio == 0.93
+    assert snap.tracking == "no_signal"
+    assert seen == [21.5, 21.5]
+
+
 @settings(max_examples=200, deadline=None)
 @given(
     st.lists(

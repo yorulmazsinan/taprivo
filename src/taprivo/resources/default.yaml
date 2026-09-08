@@ -18,3 +18,18 @@ hud:
   always_on_top: true
   opacity: 0.92
   reduced_motion: false
+camera:
+  device_index: null
+  width: 640
+  height: 480
+  preview_fps: 15
+detector:
+  smoothing_alpha: 0.4
+  baseline_alpha: 0.03
+  threshold: 0.22
+  release_ratio: 0.4
+  max_cycle_ms: 600
+  cooldown_ms: 140
+  attribution_window_ms: 120
+  reacquire_guard_ms: 300
+  frame_gap_reset_ms: 250

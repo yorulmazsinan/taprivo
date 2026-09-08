@@ -8,7 +8,7 @@ from typing import Literal
 
 from taprivo.core.events import Finger
 
-TrackingStatus = Literal["inactive", "simulator", "tracking", "stale"]
+TrackingStatus = Literal["inactive", "simulator", "tracking", "stale", "no_signal"]
 McpStatus = Literal["starting", "ready", "error"]
 Mode = Literal["simulator", "camera"]
 
@@ -42,4 +42,6 @@ class AppSnapshot:
     mcp_error: str | None
     last_tool_call_utc: datetime | None
     session_duration_seconds: int
+    camera_fps: float = 0.0
+    detection_ratio: float = 0.0
     schema_version: int = field(default=1)
