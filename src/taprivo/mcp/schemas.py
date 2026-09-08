@@ -58,3 +58,5 @@ class SessionOut(BaseModel):
     tracking: str
     mcp_uptime_seconds: int
     last_tool_call_utc: str | None
+    camera_fps: float = 0.0
+    detection_ratio: float = 0.0

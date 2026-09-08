@@ -141,6 +141,8 @@ def build_server(engine: EnergyEngine, config: Config) -> MCPServer:
             tracking=s.tracking,
             mcp_uptime_seconds=int(time.monotonic() - started),
             last_tool_call_utc=s.last_tool_call_utc.isoformat() if s.last_tool_call_utc else None,
+            camera_fps=s.camera_fps,
+            detection_ratio=s.detection_ratio,
         )
 
     return mcp

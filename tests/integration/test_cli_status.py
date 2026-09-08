@@ -37,6 +37,16 @@ def test_status_human_output(running_server: RunningServer) -> None:
     assert running_server.token not in result.output
 
 
+def test_status_shows_camera_stats(running_server: RunningServer) -> None:
+    _write_port(running_server)
+    running_server.engine.set_camera_stats(19.5, 0.8)
+    result = runner.invoke(app, ["status", "--json"])
+    payload = json.loads(result.output)
+    assert payload["camera_fps"] == 19.5 and payload["detection_ratio"] == 0.8
+    human = runner.invoke(app, ["status"])
+    assert "Camera:" in human.output and "19" in human.output
+
+
 def test_stats_json(running_server: RunningServer) -> None:
     _write_port(running_server)
     running_server.simulator.tap(Finger.PINKY)
