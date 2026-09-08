@@ -5,6 +5,11 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0a1] - 2026-09-08
+
+Developer preview. Install from source with `uv sync`; there is no signed
+macOS package yet.
+
 ### Added
 - Keyboard simulator producing tap events for thumb to pinky.
 - Energy engine with a 10,000 cap, overflow accounting, atomic spending and
@@ -17,3 +22,6 @@ Keep a Changelog and the project uses Semantic Versioning.
 ### Known limitations
 - No camera support yet; the balance resets when the app quits.
 - Only Claude Code is tested as an MCP client.
+
+[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0a1...HEAD
+[0.1.0a1]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0a1
