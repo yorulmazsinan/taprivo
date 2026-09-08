@@ -1,43 +1,14 @@
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
 from taprivo.core.events import Finger
 from taprivo.vision.calibration import CalibrationResult, FingerCalibration
-from taprivo.vision.camera import CameraError, CameraSource
+from taprivo.vision.camera import CameraError
 from taprivo.vision.controller import VisionController
-from taprivo.vision.frames import Frame
-
-
-class IdleSource(CameraSource):
-    def __init__(self, fail: bool = False) -> None:
-        super().__init__(index=1, factory=lambda i: None)
-        self._fail = fail
-        self.closed = False
-
-    def open(self) -> None:
-        if self._fail:
-            raise CameraError("camera 1 could not be opened (permission denied or device missing)")
-
-    def read(self) -> Frame | None:
-        import time
-
-        time.sleep(0.01)
-        return Frame(ts_ms=0, image=np.zeros((2, 2, 3), dtype=np.uint8))
-
-    def close(self) -> None:
-        self.closed = True
-
-
-class NoHandTracker:
-    def process(self, frame: Frame) -> None:
-        return None
-
-    def close(self) -> None:
-        pass
+from tests.vision_helpers import IdleSource, NoHandTracker
 
 
 def make(fail: bool = False) -> tuple[VisionController, EnergyEngine]:

@@ -15,12 +15,15 @@ from taprivo.logging_setup import setup_logging
 from taprivo.mcp.server import McpServerThread
 from taprivo.simulator import Simulator
 from taprivo.ui.bridge import EngineSignals, connect_engine
+from taprivo.ui.camera_window import CameraWindow
 from taprivo.ui.hud import HudWindow
+from taprivo.ui.vision_bridge import VisionSignals
+from taprivo.vision.controller import VisionController
 
 log = logging.getLogger(__name__)
 
 
-def run_app(config: Config, *, start_simulator: bool) -> int:
+def run_app(config: Config, *, start_simulator: bool, open_camera: bool = False) -> int:
     setup_logging()
     lock = paths.InstanceLock()
     if not lock.acquire():
@@ -30,6 +33,7 @@ def run_app(config: Config, *, start_simulator: bool) -> int:
         token = paths.read_or_create_token()
         engine = EnergyEngine(config)
         simulator = Simulator(engine, config)
+        controller = VisionController(engine, config)
         server = McpServerThread(engine, config, token)
         server.start()
         try:
@@ -38,20 +42,36 @@ def run_app(config: Config, *, start_simulator: bool) -> int:
             qt_app.setApplicationName("Taprivo")
             qt_app.setQuitOnLastWindowClosed(True)
 
-            window = HudWindow(engine, simulator, config)
-            signals = EngineSignals(parent=window)
-            signals.snapshot_changed.connect(window.on_snapshot, Qt.ConnectionType.QueuedConnection)
-            connect_engine(engine, signals)
+            camera_window: CameraWindow | None = None
+            signals = VisionSignals()
+
+            def open_camera_window() -> None:
+                nonlocal camera_window
+                if camera_window is None:
+                    camera_window = CameraWindow(controller, config, signals)
+                camera_window.show()
+                camera_window.raise_()
+                camera_window.activateWindow()
+
+            window = HudWindow(engine, simulator, config, on_open_camera=open_camera_window)
+            engine_signals = EngineSignals(parent=window)
+            engine_signals.snapshot_changed.connect(
+                window.on_snapshot, Qt.ConnectionType.QueuedConnection
+            )
+            connect_engine(engine, engine_signals)
             window.on_snapshot(engine.snapshot())
             if start_simulator:
                 simulator.start()
             window.show()
             window.raise_()
             window.activateWindow()
+            if open_camera:
+                open_camera_window()
             log.info("Taprivo started (simulator=%s)", start_simulator)
             code = qt_app.exec()
             return int(code)
         finally:
+            controller.stop()
             server.stop()
     finally:
         lock.release()
