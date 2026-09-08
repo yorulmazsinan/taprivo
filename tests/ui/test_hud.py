@@ -6,7 +6,6 @@ from pytestqt.qtbot import QtBot
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
-from taprivo.ui import hud as hud_module
 from tests.ui.conftest import HudBundle
 
 
@@ -63,7 +62,7 @@ def test_reduced_motion_renders(reduced_motion_hud: HudBundle, qtbot: QtBot) -> 
     reduced_motion_hud.window.toggle_simulator()
     qtbot.keyClick(reduced_motion_hud.window, "1")
     qtbot.waitUntil(lambda: reduced_motion_hud.window.bar.value() == 10, timeout=2000)
-    assert hud_module.REDUCED_MOTION_STYLE in reduced_motion_hud.window.bar.styleSheet()
+    assert reduced_motion_hud.window.bar.isReducedMotion() is True
 
 
 def test_no_signal_status_text(hud: HudBundle, qtbot: QtBot) -> None:
@@ -96,3 +95,17 @@ def test_open_camera_button_calls_back(qtbot: QtBot) -> None:
     plain = HudWindow(engine, Simulator(engine, Config()), Config())
     qtbot.addWidget(plain)
     assert not plain.open_camera_button.isEnabled()
+
+
+def test_snapshot_renders_expected_size_and_colors(hud: HudBundle) -> None:
+    image = hud.window.grab().toImage()
+    assert image.width() == 380
+    colors: set[int] = set()
+    for y in range(image.height()):
+        for x in range(image.width()):
+            colors.add(image.pixel(x, y))
+            if len(colors) > 2:
+                break
+        if len(colors) > 2:
+            break
+    assert len(colors) > 2

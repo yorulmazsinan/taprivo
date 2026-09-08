@@ -17,6 +17,7 @@ from taprivo.simulator import Simulator
 from taprivo.ui.bridge import EngineSignals, connect_engine
 from taprivo.ui.camera_window import CameraWindow
 from taprivo.ui.hud import HudWindow
+from taprivo.ui.theme import apply_theme
 from taprivo.ui.vision_bridge import VisionSignals
 from taprivo.vision.controller import VisionController
 
@@ -41,6 +42,7 @@ def run_app(config: Config, *, start_simulator: bool, open_camera: bool = False)
             qt_app = existing if isinstance(existing, QApplication) else QApplication(sys.argv[:1])
             qt_app.setApplicationName("Taprivo")
             qt_app.setQuitOnLastWindowClosed(True)
+            apply_theme(qt_app, config.hud.theme)
 
             camera_window: CameraWindow | None = None
             signals = VisionSignals()

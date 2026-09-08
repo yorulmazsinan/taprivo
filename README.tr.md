@@ -111,6 +111,7 @@ hud:
   always_on_top: true
   opacity: 0.92
   reduced_motion: false
+  theme: system   # system | dark | light
 ```
 
 32145 portu doluysa HUD `MCP: Error` gösterir; `server.port` değerini değiştirip

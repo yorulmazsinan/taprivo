@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -54,6 +54,7 @@ class HudConfig(_Frozen):
     always_on_top: bool = True
     opacity: float = Field(default=0.92, ge=0.2, le=1.0)
     reduced_motion: bool = False
+    theme: Literal["system", "dark", "light"] = "system"
 
 
 class CameraConfig(_Frozen):
