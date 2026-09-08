@@ -61,20 +61,20 @@ def test_config_is_frozen(taprivo_home: Path) -> None:
         cfg.energy.energy_per_tap = 99  # type: ignore[misc]
 
 
-def test_camera_and_detector_defaults(taprivo_home: Path) -> None:
+def test_camera_and_squeeze_defaults(taprivo_home: Path) -> None:
     cfg = load_config()
     assert cfg.camera.device_index is None
     assert (cfg.camera.width, cfg.camera.height, cfg.camera.preview_fps) == (640, 480, 15)
-    assert cfg.detector.threshold == 0.22
-    assert cfg.detector.cooldown_ms == 140
-    assert cfg.detector.frame_gap_reset_ms == 250
+    assert cfg.squeeze.open_level == 0.80
+    assert cfg.squeeze.cooldown_ms == 300
+    assert cfg.squeeze.frame_gap_reset_ms == 250
 
 
 def test_camera_override(taprivo_home: Path) -> None:
     taprivo_home.mkdir(parents=True)
     (taprivo_home / "config.yaml").write_text(
-        "camera:\n  device_index: 1\ndetector:\n  threshold: 0.3\n"
+        "camera:\n  device_index: 1\nsqueeze:\n  cooldown_ms: 500\n"
     )
     cfg = load_config()
     assert cfg.camera.device_index == 1
-    assert cfg.detector.threshold == 0.3
+    assert cfg.squeeze.cooldown_ms == 500

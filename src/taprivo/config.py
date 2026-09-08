@@ -63,15 +63,14 @@ class CameraConfig(_Frozen):
     preview_fps: int = Field(default=15, ge=1, le=60)
 
 
-class DetectorConfig(_Frozen):
-    smoothing_alpha: float = Field(default=0.4, gt=0, le=1)
-    baseline_alpha: float = Field(default=0.03, gt=0, le=1)
-    threshold: float = Field(default=0.22, gt=0, le=1)
-    release_ratio: float = Field(default=0.4, gt=0, lt=1)
-    max_cycle_ms: int = Field(default=600, ge=50)
-    cooldown_ms: int = Field(default=140, ge=0)
-    attribution_window_ms: int = Field(default=120, ge=0)
-    reacquire_guard_ms: int = Field(default=300, ge=0)
+class SqueezeConfig(_Frozen):
+    smoothing_alpha: float = Field(default=0.5, gt=0, le=1)
+    open_level: float = Field(default=0.80, gt=0, le=2)
+    closed_level: float = Field(default=0.45, gt=0, le=2)
+    band_ratio: float = Field(default=0.25, gt=0, lt=0.5)
+    min_closed_ms: int = Field(default=120, ge=0)
+    max_cycle_ms: int = Field(default=2500, ge=100)
+    cooldown_ms: int = Field(default=300, ge=0)
     frame_gap_reset_ms: int = Field(default=250, ge=50)
 
 
@@ -83,7 +82,7 @@ class Config(_Frozen):
     simulator: SimulatorConfig = Field(default_factory=SimulatorConfig)
     hud: HudConfig = Field(default_factory=HudConfig)
     camera: CameraConfig = Field(default_factory=CameraConfig)
-    detector: DetectorConfig = Field(default_factory=DetectorConfig)
+    squeeze: SqueezeConfig = Field(default_factory=SqueezeConfig)
 
     @property
     def endpoint_url(self) -> str:

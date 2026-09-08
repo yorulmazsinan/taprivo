@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass
 
 import numpy as np
@@ -19,6 +20,12 @@ class Frame:
 class FingerFeatures:
     scale: float
     c2: dict[Finger, float]
+
+    @property
+    def openness(self) -> float:
+        return statistics.fmean(
+            self.c2[f] for f in (Finger.INDEX, Finger.MIDDLE, Finger.RING, Finger.PINKY)
+        )
 
 
 @dataclass(frozen=True, slots=True)

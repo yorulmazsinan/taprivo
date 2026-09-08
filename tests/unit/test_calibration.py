@@ -1,182 +1,157 @@
 from __future__ import annotations
 
-import statistics
 import threading
+from collections.abc import Sequence
 
-from taprivo.core.events import Finger
 from taprivo.vision.calibration import (
-    COUNTDOWN_MS,
-    NOISE_MS,
-    ORDER,
-    RECORD_MS,
-    THRESHOLD_MAX,
-    THRESHOLD_MIN,
+    FIST_MS,
+    OPEN_MS,
+    SQUEEZE_MS,
     VISIBILITY_MS,
     CalibrationSession,
 )
-from taprivo.vision.detector import DetectorParams
-from tests.vision_helpers import flat, pulse
+from taprivo.vision.frames import HandFrame
+from taprivo.vision.squeeze import SqueezeParams
+from tests.vision_helpers import squeeze_cycle, steady
 
 
 def session() -> CalibrationSession:
-    s = CalibrationSession(DetectorParams(), lambda: "cal")
+    s = CalibrationSession(SqueezeParams(), lambda: "cal")
     s.start(0)
     return s
 
 
-def feed(s: CalibrationSession, frames: list, ts_end: int | None = None) -> None:
-    for f in frames:
-        s.process(f, f.ts_ms)
+def feed(
+    s: CalibrationSession, frames: Sequence[tuple[HandFrame, ...]], ts_end: int | None = None
+) -> None:
+    for hands in frames:
+        s.process(hands, hands[0].ts_ms)
     if ts_end is not None:
-        s.process(None, ts_end)
+        s.process((), ts_end)
 
 
-def taps_for(finger: Finger, start: int, count: int, amplitude: float = 0.5) -> list:
-    """Five (or more) pulses spaced 700ms apart, bridged with flat frames so the
-    inter-pulse gap never exceeds the detector's frame_gap_reset_ms and triggers a
-    spurious reacquire that would swallow the in-flight tap before it releases."""
-    frames: list = []
-    for i in range(count):
-        pulse_start = start + i * 700
-        if frames:
-            gap_start = frames[-1].ts_ms + 40
-            gap_len = pulse_start - gap_start
-            if gap_len > 0:
-                frames += flat(gap_start, gap_len)
-        frames += pulse(pulse_start, finger, amplitude)
-    return frames
+def drive_to_squeeze(
+    s: CalibrationSession, open_value: float = 0.9, closed_value: float = 0.3
+) -> int:
+    """Pass visibility, open and fist so the session is ready for the squeeze step.
 
-
-def drive_to_record(s: CalibrationSession, finger_index: int = 0, jitter: float = 0.01) -> int:
-    """Pass visibility and noise, then countdowns/records for fingers before finger_index.
-
-    Returns ts.
+    Returns the ts_ms at which the squeeze step starts.
     """
     ts = 0
-    feed(s, flat(ts, VISIBILITY_MS, jitter=jitter), VISIBILITY_MS)
+    feed(s, steady(ts, VISIBILITY_MS, value=open_value), VISIBILITY_MS)
     ts = VISIBILITY_MS
-    feed(s, flat(ts, NOISE_MS, jitter=jitter), ts + NOISE_MS)
-    ts += NOISE_MS
-    for _ in range(finger_index):
-        feed(s, flat(ts, COUNTDOWN_MS), ts + COUNTDOWN_MS)
-        ts += COUNTDOWN_MS
-        feed(s, flat(ts, RECORD_MS), ts + RECORD_MS)
-        ts += RECORD_MS
-    feed(s, flat(ts, COUNTDOWN_MS), ts + COUNTDOWN_MS)
-    return ts + COUNTDOWN_MS
+    feed(s, steady(ts, OPEN_MS, value=open_value), ts + OPEN_MS)
+    ts += OPEN_MS
+    feed(s, steady(ts, FIST_MS, value=closed_value), ts + FIST_MS)
+    ts += FIST_MS
+    return ts
 
 
 def test_visibility_repeats_until_hand_is_visible() -> None:
     s = session()
     for ts in range(0, VISIBILITY_MS, 40):  # no hand at all
-        p = s.process(None, ts)
-    p = s.process(None, VISIBILITY_MS)
+        s.process((), ts)
+    p = s.process((), VISIBILITY_MS)
     assert p.step == "visibility"
     assert "into view" in p.text
-    feed(s, flat(VISIBILITY_MS, VISIBILITY_MS), 2 * VISIBILITY_MS)
-    assert s.prompt().step == "noise"
+    feed(s, steady(VISIBILITY_MS, VISIBILITY_MS), 2 * VISIBILITY_MS)
+    assert s.prompt().step == "open"
 
 
-def test_noise_floor_then_countdown_for_index() -> None:
+def test_prompts_follow_the_step_sequence() -> None:
     s = session()
-    feed(s, flat(0, VISIBILITY_MS), VISIBILITY_MS)
-    feed(s, flat(VISIBILITY_MS, NOISE_MS, jitter=0.02, seed=1), VISIBILITY_MS + NOISE_MS)
-    p = s.prompt()
-    assert p.step == "countdown" and p.finger is ORDER[0] is Finger.INDEX
-    assert p.remaining_ms == COUNTDOWN_MS
+    assert s.prompt().text == "Show your hand to the camera"
+    ts = VISIBILITY_MS
+    feed(s, steady(0, VISIBILITY_MS), ts)
+    assert s.prompt().text == "Open your hand wide"
+    feed(s, steady(ts, OPEN_MS), ts + OPEN_MS)
+    ts += OPEN_MS
+    assert s.prompt().text == "Make a fist"
+    feed(s, steady(ts, FIST_MS, value=0.3), ts + FIST_MS)
+    ts += FIST_MS
+    assert s.prompt().text == "Squeeze your hand 5 times (open, fist, open)"
 
 
-def test_record_step_collects_taps_and_computes_threshold() -> None:
+def test_open_and_fist_steps_advance_after_their_windows() -> None:
     s = session()
-    ts = drive_to_record(s)
-    assert s.prompt().step == "record" and s.prompt().finger is Finger.INDEX
-    feed(s, flat(ts, 300) + taps_for(Finger.INDEX, ts + 300, 5), ts + RECORD_MS)
-    # run remaining fingers with no taps
-    ts += RECORD_MS
-    for _ in ORDER[1:]:
-        feed(s, flat(ts, COUNTDOWN_MS), ts + COUNTDOWN_MS)
-        ts += COUNTDOWN_MS
-        feed(s, flat(ts, RECORD_MS), ts + RECORD_MS)
-        ts += RECORD_MS
+    ts = drive_to_squeeze(s, open_value=0.9, closed_value=0.3)
+    assert s.prompt().step == "squeeze"
+    assert ts == VISIBILITY_MS + OPEN_MS + FIST_MS
+
+
+def test_five_cycles_yield_ok_status_and_calibrated_levels() -> None:
+    s = session()
+    ts = drive_to_squeeze(s, open_value=0.9, closed_value=0.3)
+    frames: list[tuple[HandFrame, ...]] = []
+    for i in range(5):
+        frames += squeeze_cycle(ts + i * 1200, open_value=0.9, closed_value=0.3)
+    feed(s, frames, ts + SQUEEZE_MS)
     assert s.finished
     result = s.result()
     assert result is not None
-    index = result.fingers[Finger.INDEX]
-    assert index.status == "ok" and index.taps == 5
-    expected = min(
-        max(max(3 * index.sigma, 0.5 * index.median_amplitude), THRESHOLD_MIN), THRESHOLD_MAX
-    )
-    assert abs(index.threshold - expected) < 1e-9
-    assert result.thresholds[Finger.INDEX] == index.threshold
-    ring = result.fingers[Finger.RING]
-    assert ring.status == "uncalibrated" and ring.taps == 0
-    assert result.thresholds[Finger.RING] == DetectorParams().threshold
+    assert result.status == "ok"
+    assert result.cycles == 5
+    assert abs(result.levels.open_level - 0.9) < 1e-9
+    assert abs(result.levels.closed_level - 0.3) < 1e-9
 
 
-def test_too_many_taps_marks_uncalibrated() -> None:
+def test_too_few_cycles_marks_uncalibrated_with_default_levels() -> None:
     s = session()
-    ts = drive_to_record(s)
-    feed(s, flat(ts, 200) + taps_for(Finger.INDEX, ts + 200, 9, amplitude=0.5), ts + RECORD_MS)
-    ts += RECORD_MS
-    for _ in ORDER[1:]:
-        feed(s, flat(ts, COUNTDOWN_MS), ts + COUNTDOWN_MS)
-        ts += COUNTDOWN_MS
-        feed(s, flat(ts, RECORD_MS), ts + RECORD_MS)
-        ts += RECORD_MS
+    ts = drive_to_squeeze(s, open_value=0.9, closed_value=0.3)
+    frames = squeeze_cycle(ts, open_value=0.9, closed_value=0.3)
+    feed(s, frames, ts + SQUEEZE_MS)
+    assert s.finished
     result = s.result()
     assert result is not None
-    assert result.fingers[Finger.INDEX].taps >= 8
-    assert result.fingers[Finger.INDEX].status == "uncalibrated"
+    assert result.status == "uncalibrated"
+    assert result.cycles == 1
+    assert result.levels.open_level == SqueezeParams().open_level
+    assert result.levels.closed_level == SqueezeParams().closed_level
 
 
-def test_threshold_clamps() -> None:
-    from taprivo.vision.calibration import compute_threshold
-
-    assert compute_threshold(sigma=0.0, median_amplitude=0.01) == THRESHOLD_MIN
-    assert compute_threshold(sigma=0.5, median_amplitude=0.1) == THRESHOLD_MAX
-    assert abs(compute_threshold(sigma=0.02, median_amplitude=0.5) - 0.25) < 1e-9
+def test_narrow_span_marks_uncalibrated() -> None:
+    s = session()
+    ts = drive_to_squeeze(s, open_value=0.5, closed_value=0.4)  # span 0.1 < MIN_SPAN (0.15)
+    feed(s, steady(ts, SQUEEZE_MS, value=0.5), ts + SQUEEZE_MS)
+    result = s.result()
+    assert result is not None
+    assert result.status == "uncalibrated"
+    assert result.levels.open_level == SqueezeParams().open_level
+    assert result.levels.closed_level == SqueezeParams().closed_level
 
 
 def test_progress_and_export() -> None:
     s = session()
     assert s.prompt().progress == 0.0
-    feed(s, flat(0, VISIBILITY_MS), VISIBILITY_MS)
+    feed(s, steady(0, VISIBILITY_MS), VISIBILITY_MS)
     assert 0 < s.prompt().progress < 1
     rows = s.export_rows()
-    assert rows and set(rows[0]) >= {"ts_ms", "step", "finger", "index"}
+    assert rows
+    assert set(rows[0]) >= {
+        "ts_ms",
+        "step",
+        "hand",
+        "openness",
+        "thumb",
+        "index",
+        "middle",
+        "ring",
+        "pinky",
+    }
     assert all("image" not in k for k in rows[0])
-
-
-def test_sigma_uses_noise_window_only() -> None:
-    s = session()
-    feed(s, flat(0, VISIBILITY_MS, jitter=0.2, seed=5), VISIBILITY_MS)  # noisy visibility window
-    feed(s, flat(VISIBILITY_MS, NOISE_MS, jitter=0.0), VISIBILITY_MS + NOISE_MS)  # perfectly still
-    ts = VISIBILITY_MS + NOISE_MS
-    for _ in ORDER:
-        feed(s, flat(ts, COUNTDOWN_MS), ts + COUNTDOWN_MS)
-        ts += COUNTDOWN_MS
-        feed(s, flat(ts, RECORD_MS), ts + RECORD_MS)
-        ts += RECORD_MS
-    result = s.result()
-    assert result is not None
-    assert all(abs(fc.sigma) < 1e-9 for fc in result.fingers.values())
-    assert (
-        statistics.mean(fc.threshold for fc in result.fingers.values())
-        == DetectorParams().threshold
-    )
 
 
 def test_concurrent_process_and_reads_are_thread_safe() -> None:
     # Simulates the real deployment: the worker thread drives process() while
     # the Qt tick timer concurrently reads prompt()/result()/finished/export_rows().
     s = session()
-    frames = flat(0, VISIBILITY_MS + NOISE_MS + COUNTDOWN_MS, jitter=0.01)
+    frames = steady(0, VISIBILITY_MS + OPEN_MS, value=0.9)
     errors: list[BaseException] = []
 
     def writer() -> None:
         try:
-            for f in frames:
-                s.process(f, f.ts_ms)
+            for hands in frames:
+                s.process(hands, hands[0].ts_ms)
         except BaseException as exc:
             errors.append(exc)
 

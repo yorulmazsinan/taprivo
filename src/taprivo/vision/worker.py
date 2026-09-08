@@ -9,17 +9,17 @@ from collections import deque
 from collections.abc import Callable
 
 from taprivo.core.energy import EnergyEngine
-from taprivo.core.events import Finger, TapEvent, now_monotonic_ms
+from taprivo.core.events import TapEvent, now_monotonic_ms
 from taprivo.core.state import TrackingStatus
 from taprivo.vision.calibration import CalibrationSession
 from taprivo.vision.camera import STALE_MS, CameraSource
-from taprivo.vision.detector import DetectorState, TapDetector
 from taprivo.vision.frames import Frame, FrameStats, HandFrame
+from taprivo.vision.squeeze import Levels, SqueezeDetector, SqueezeState
 from taprivo.vision.tracker import HandTracker
 
 log = logging.getLogger(__name__)
 
-PreviewCallback = Callable[[Frame, HandFrame | None, DetectorState], None]
+PreviewCallback = Callable[[Frame, tuple[HandFrame, ...], SqueezeState], None]
 TRACKING_WINDOW_MS = 1000
 TRACKING_MIN_RATIO = 0.5
 
@@ -77,7 +77,7 @@ class VisionWorker(threading.Thread):
     def __init__(
         self,
         engine: EnergyEngine,
-        detector: TapDetector,
+        detector: SqueezeDetector,
         source_factory: Callable[[], CameraSource],
         tracker_factory: Callable[[], HandTracker],
         *,
@@ -126,13 +126,13 @@ class VisionWorker(threading.Thread):
         with self._lock:
             return self._calibration
 
-    def apply_thresholds(self, thresholds: dict[Finger, float]) -> None:
+    def apply_levels(self, levels: Levels) -> None:
         with self._lock:
-            self._detector.set_thresholds(thresholds)
+            self._detector.set_levels(levels)
 
-    def thresholds(self) -> dict[Finger, float]:
+    def levels(self) -> Levels:
         with self._lock:
-            return self._detector.thresholds()
+            return self._detector.levels()
 
     # -- loop ----------------------------------------------------------------
 
@@ -165,8 +165,8 @@ class VisionWorker(threading.Thread):
                 if last_frame_ts is not None and now - last_frame_ts > STALE_MS:
                     self._set_status("stale")
                 with self._lock:
-                    self._tick_calibration_locked(None, now)
-                    events = self._detector.process(None, now)
+                    self._tick_calibration_locked((), now)
+                    events = self._detector.process((), now)
                 self._emit(events)
                 time.sleep(0.005)
                 continue
@@ -177,11 +177,11 @@ class VisionWorker(threading.Thread):
                 self._set_status("no_signal")
                 self._stats.processed(frame.ts_ms, False)
                 continue
-            hand = tracker.process(frame)
-            self._stats.processed(frame.ts_ms, hand is not None)
+            hands = tracker.process(frame)
+            self._stats.processed(frame.ts_ms, bool(hands))
             with self._lock:
-                self._tick_calibration_locked(hand, frame.ts_ms)
-                events = self._detector.process(hand, frame.ts_ms)
+                self._tick_calibration_locked(hands, frame.ts_ms)
+                events = self._detector.process(hands, frame.ts_ms)
             self._emit(events)
             ratio = self._stats.detection_ratio(frame.ts_ms, TRACKING_WINDOW_MS)
             self._set_status("tracking" if ratio >= TRACKING_MIN_RATIO else "stale")
@@ -198,13 +198,13 @@ class VisionWorker(threading.Thread):
                 with self._lock:
                     state = self._detector.state()
                 try:
-                    self._preview(frame, hand, state)
+                    self._preview(frame, hands, state)
                 except Exception:
                     log.exception("preview callback failed")
 
-    def _tick_calibration_locked(self, hand: HandFrame | None, ts_ms: int) -> None:
+    def _tick_calibration_locked(self, hands: tuple[HandFrame, ...], ts_ms: int) -> None:
         if self._calibration is not None and not self._calibration.finished:
-            self._calibration.process(hand, ts_ms)
+            self._calibration.process(hands, ts_ms)
 
     def _emit(self, events: list[TapEvent]) -> None:
         for event in events:

@@ -3,27 +3,19 @@
 from __future__ import annotations
 
 import csv
-import random
+import dataclasses
 import time
-from collections.abc import Iterable
-from dataclasses import replace
 from pathlib import Path
-from weakref import WeakKeyDictionary
 
 import numpy as np
 
 from taprivo.core.events import Finger, Hand, TapEvent
 from taprivo.vision.camera import CameraError, CameraSource
-from taprivo.vision.detector import DetectorParams, TapDetector
 from taprivo.vision.features import compute_features
 from taprivo.vision.frames import FingerFeatures, Frame, HandFrame
+from taprivo.vision.squeeze import SqueezeDetector, SqueezeParams
 
 DUMMY_LANDMARKS = tuple((0.5, 0.5, 0.0) for _ in range(21))
-
-# Last frame timestamp actually fed to each detector via run(), across calls, so
-# chained run() calls on the same detector can be checked for non-decreasing
-# timestamps too (see run() below).
-_LAST_FED_TS: WeakKeyDictionary[TapDetector, int] = WeakKeyDictionary()
 
 
 def hand_frame(
@@ -44,91 +36,84 @@ def hand_frame(
     )
 
 
-def flat(
-    start_ms: int,
-    duration_ms: int,
-    fps: int = 25,
-    base: float = 0.6,
-    jitter: float = 0.0,
-    seed: int = 0,
-) -> list[HandFrame]:
-    rng = random.Random(seed)
-    step = 1000 // fps
+def hands_frame(
+    ts_ms: int, openness_by_hand: dict[Hand, float], score: float = 0.95
+) -> tuple[HandFrame, ...]:
+    """One HandFrame per hand; all four non-thumb fingers share the openness value."""
     frames = []
-    for ts in range(start_ms, start_ms + duration_ms, step):
-        c2 = {f: base + (rng.uniform(-jitter, jitter) if jitter else 0.0) for f in Finger}
-        frames.append(hand_frame(ts, c2))
-    return frames
+    for hand, openness in openness_by_hand.items():
+        c2 = {f: openness for f in Finger}
+        c2[Finger.THUMB] = 0.5
+        frames.append(hand_frame(ts_ms, c2, hand_id=f"{hand.value}-1", score=score, hand=hand))
+    return tuple(frames)
 
 
-def pulse(
+def squeeze_cycle(
     start_ms: int,
-    finger: Finger,
-    amplitude: float,
-    base: float = 0.6,
-    duration_ms: int = 300,
+    hand: Hand = Hand.RIGHT,
+    open_value: float = 0.9,
+    closed_value: float = 0.3,
+    duration_ms: int = 800,
     fps: int = 25,
-    others: float = 0.6,
-    hand_id: str = "h1",
-) -> list[HandFrame]:
-    """Triangular flex/extend cycle on one finger; the others stay flat."""
+) -> list[tuple[HandFrame, ...]]:
+    """Open → closed → open triangle over duration_ms; returns per-frame hand tuples."""
     step = 1000 // fps
-    frames = []
+    out = []
     for ts in range(start_ms, start_ms + duration_ms + step, step):
         phase = (ts - start_ms) / duration_ms
-        depth = amplitude * (1 - abs(2 * phase - 1)) if 0 <= phase <= 1 else 0.0
-        c2 = {f: others for f in Finger}
-        c2[finger] = base - depth
-        frames.append(hand_frame(ts, c2, hand_id=hand_id))
-    return frames
+        depth = (open_value - closed_value) * (1 - abs(2 * phase - 1)) if 0 <= phase <= 1 else 0.0
+        out.append(hands_frame(ts, {hand: open_value - depth}))
+    return out
 
 
-def run(detector: TapDetector, frames: Iterable[HandFrame], tail_ms: int = 400) -> list[TapEvent]:
+def steady(
+    start_ms: int,
+    duration_ms: int,
+    value: float = 0.9,
+    hand: Hand = Hand.RIGHT,
+    fps: int = 25,
+) -> list[tuple[HandFrame, ...]]:
+    step = 1000 // fps
+    return [hands_frame(ts, {hand: value}) for ts in range(start_ms, start_ms + duration_ms, step)]
+
+
+def run_squeeze(
+    detector: SqueezeDetector, sequence: list[tuple[HandFrame, ...]], tail_ms: int = 400
+) -> list[TapEvent]:
     events: list[TapEvent] = []
-    last = 0
-    last_frame: HandFrame | None = None
-    prior = _LAST_FED_TS.get(detector)
-
-    def feed(frame: HandFrame | None, ts_ms: int) -> None:
-        nonlocal prior
-        if prior is not None and ts_ms < prior:
-            raise AssertionError("non-monotonic frame timestamps in test input")
-        prior = ts_ms
-        _LAST_FED_TS[detector] = ts_ms
-        events.extend(detector.process(frame, ts_ms))
-
-    for frame in frames:
-        feed(frame, frame.ts_ms)
-        last = frame.ts_ms
-        last_frame = frame
-    # Hold the hand still at its last observed pose so in-flight excursions can
-    # settle back toward baseline, and let matured candidates clear the
-    # attribution window, without inventing new motion.
-    for ts in range(last + 40, last + tail_ms, 40):
-        held = None if last_frame is None else replace(last_frame, ts_ms=ts)
-        feed(held, ts)
+    last_ts = None
+    for hands in sequence:
+        ts = hands[0].ts_ms if hands else (last_ts or 0) + 40
+        events.extend(detector.process(hands, ts))
+        last_ts = ts
+    if sequence and sequence[-1]:
+        for ts in range((last_ts or 0) + 40, (last_ts or 0) + tail_ms, 40):
+            held = tuple(dataclasses.replace(h, ts_ms=ts) for h in sequence[-1])
+            events.extend(detector.process(held, ts))
     return events
 
 
-def replay_csv(path: Path, params: DetectorParams) -> list[TapEvent]:
-    detector = TapDetector(params, lambda: "replay-session")
-    frames: list[HandFrame] = []
+def replay_csv(path: Path, params: SqueezeParams) -> list[TapEvent]:
+    detector = SqueezeDetector(params, lambda: "replay-session")
+    sequence: list[tuple[HandFrame, ...]] = []
     with path.open() as fh:
         for row in csv.DictReader(fh):
             pts = tuple(
                 (float(row[f"x{i}"]), float(row[f"y{i}"]), float(row[f"z{i}"])) for i in range(21)
             )
-            frames.append(
-                HandFrame(
-                    ts_ms=int(row["ts_ms"]),
-                    hand=Hand.RIGHT if row["hand"] == "Right" else Hand.LEFT,
-                    hand_id="spike",
-                    score=float(row["score"]),
-                    landmarks=pts,
-                    features=compute_features(pts),
+            sequence.append(
+                (
+                    HandFrame(
+                        ts_ms=int(row["ts_ms"]),
+                        hand=Hand.RIGHT if row["hand"] == "Right" else Hand.LEFT,
+                        hand_id="spike",
+                        score=float(row["score"]),
+                        landmarks=pts,
+                        features=compute_features(pts),
+                    ),
                 )
             )
-    return run(detector, frames)
+    return run_squeeze(detector, sequence)
 
 
 class IdleSource(CameraSource):
@@ -160,8 +145,8 @@ class IdleSource(CameraSource):
 
 
 class NoHandTracker:
-    def process(self, frame: Frame) -> None:
-        return None
+    def process(self, frame: Frame) -> tuple[HandFrame, ...]:
+        return ()
 
     def close(self) -> None:
         pass

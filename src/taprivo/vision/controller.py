@@ -6,12 +6,12 @@ from collections.abc import Callable
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
-from taprivo.core.events import Finger, now_monotonic_ms
+from taprivo.core.events import now_monotonic_ms
 from taprivo.core.state import TrackingStatus
 from taprivo.vision.calibration import CalibrationResult, CalibrationSession
 from taprivo.vision.camera import CameraError, CameraSource
-from taprivo.vision.detector import DetectorParams, TapDetector
 from taprivo.vision.frames import FrameStats
+from taprivo.vision.squeeze import Levels, SqueezeDetector, SqueezeParams
 from taprivo.vision.tracker import HandTracker, MediaPipeHandTracker, ModelError
 from taprivo.vision.worker import PreviewCallback, VisionWorker
 
@@ -40,8 +40,8 @@ class VisionController:
         self._source_factory = source_factory or default_source_factory
         self._tracker_factory = tracker_factory or MediaPipeHandTracker
         self._now_ms = now_ms
-        self._params = DetectorParams.from_config(config.detector)
-        self._detector = TapDetector(self._params, lambda: engine.session_id)
+        self._params = SqueezeParams.from_config(config.squeeze)
+        self._detector = SqueezeDetector(self._params, lambda: engine.session_id)
         self._worker: VisionWorker | None = None
         self.device_index: int | None = None
 
@@ -52,7 +52,7 @@ class VisionController:
         return self._worker is not None and self._worker.is_alive()
 
     @property
-    def detector(self) -> TapDetector:
+    def detector(self) -> SqueezeDetector:
         return self._detector
 
     @property
@@ -122,19 +122,19 @@ class VisionController:
 
     def apply_calibration(self, result: CalibrationResult) -> None:
         if self.running and self._worker is not None:
-            self._worker.apply_thresholds(result.thresholds)
+            self._worker.apply_levels(result.levels)
             self._worker.set_calibration(None)
         else:
-            self._detector.set_thresholds(result.thresholds)
+            self._detector.set_levels(result.levels)
 
-    def thresholds(self) -> dict[Finger, float]:
+    def levels(self) -> Levels:
         if self.running and self._worker is not None:
-            return self._worker.thresholds()
-        return self._detector.thresholds()
+            return self._worker.levels()
+        return self._detector.levels()
 
-    def reset_thresholds(self) -> None:
-        defaults = {f: self._params.threshold for f in Finger}
+    def reset_levels(self) -> None:
+        defaults = Levels(self._params.open_level, self._params.closed_level)
         if self.running and self._worker is not None:
-            self._worker.apply_thresholds(defaults)
+            self._worker.apply_levels(defaults)
         else:
-            self._detector.set_thresholds(defaults)
+            self._detector.set_levels(defaults)

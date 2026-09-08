@@ -8,13 +8,12 @@ import pytest
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
-from taprivo.core.events import Finger
 from taprivo.vision.calibration import CalibrationSession
 from taprivo.vision.camera import CameraError, CameraSource
-from taprivo.vision.detector import DetectorParams, TapDetector
 from taprivo.vision.frames import Frame, HandFrame
+from taprivo.vision.squeeze import SqueezeDetector, SqueezeParams
 from taprivo.vision.worker import StatsWindow, VisionWorker
-from tests.vision_helpers import flat, pulse
+from tests.vision_helpers import squeeze_cycle, steady
 
 
 class ScriptedSource(CameraSource):
@@ -51,14 +50,14 @@ class ScriptedSource(CameraSource):
 
 
 class ScriptedTracker:
-    """Maps frame ts → HandFrame from a dict; None for frames without a hand."""
+    """Maps frame ts → hands tuple from a dict; () for frames without a hand."""
 
-    def __init__(self, hands: dict[int, HandFrame]) -> None:
+    def __init__(self, hands: dict[int, tuple[HandFrame, ...]]) -> None:
         self._hands = hands
         self.closed = False
 
-    def process(self, frame: Frame) -> HandFrame | None:
-        return self._hands.get(frame.ts_ms)
+    def process(self, frame: Frame) -> tuple[HandFrame, ...]:
+        return self._hands.get(frame.ts_ms, ())
 
     def close(self) -> None:
         self.closed = True
@@ -69,9 +68,10 @@ def blank(ts: int) -> Frame:
 
 
 def hand_script(
-    frames: list[HandFrame],
-) -> tuple[list[tuple[int, Frame | None]], dict[int, HandFrame]]:
-    return [(5, blank(h.ts_ms)) for h in frames], {h.ts_ms: h for h in frames}
+    frames: list[tuple[HandFrame, ...]],
+) -> tuple[list[tuple[int, Frame | None]], dict[int, tuple[HandFrame, ...]]]:
+    ts_list = [hands[0].ts_ms for hands in frames if hands]
+    return [(5, blank(ts)) for ts in ts_list], {hands[0].ts_ms: hands for hands in frames if hands}
 
 
 @pytest.fixture
@@ -86,7 +86,7 @@ def run_worker(  # type: ignore[no-untyped-def]
     seconds: float = 1.5,
     **kw,
 ) -> VisionWorker:
-    detector = TapDetector(DetectorParams(), lambda: engine.session_id)
+    detector = SqueezeDetector(SqueezeParams(), lambda: engine.session_id)
     worker = VisionWorker(engine, detector, lambda: source, lambda: tracker, **kw)
     worker.start()
     assert worker.wait_started(2.0)
@@ -99,14 +99,13 @@ def run_worker(  # type: ignore[no-untyped-def]
 
 
 def test_taps_reach_engine_and_tracking_becomes_active(engine: EnergyEngine) -> None:
-    frames = flat(0, 600) + pulse(600, Finger.INDEX, 0.5) + flat(940, 600)
+    frames = steady(0, 600) + squeeze_cycle(600) + steady(1440, 600)
     script, hands = hand_script(frames)
     source = ScriptedSource(script)
     tracker = ScriptedTracker(hands)
     worker = run_worker(engine, source, tracker)
     snap = engine.snapshot()
-    assert snap.taps_per_finger[Finger.INDEX] == 1
-    assert snap.available == 10
+    assert snap.available == 50  # one squeeze cycle == five finger events == 50 energy
     assert source.closed
     assert tracker.closed  # run()'s finally closes the tracker alongside the source
     assert worker.error is None
@@ -117,7 +116,7 @@ def test_taps_reach_engine_and_tracking_becomes_active(engine: EnergyEngine) -> 
 def test_tracking_status_transitions(engine: EnergyEngine) -> None:
     seen: list[str] = []
     engine.subscribe(lambda s: seen.append(s.tracking))
-    frames = flat(0, 800)
+    frames = steady(0, 800)
     script, hands = hand_script(frames)
     script += [(50, blank(900 + i * 40)) for i in range(5)]  # frames without a hand
     run_worker(engine, ScriptedSource(script), ScriptedTracker(hands))
@@ -127,12 +126,12 @@ def test_tracking_status_transitions(engine: EnergyEngine) -> None:
 
 def test_stale_when_no_frames_arrive(engine: EnergyEngine) -> None:
     clock = [0]
-    frames = flat(0, 400)
+    frames = steady(0, 400)
     script, hands = hand_script(frames)
     source = ScriptedSource(script)
     worker = VisionWorker(
         engine,
-        TapDetector(DetectorParams(), lambda: engine.session_id),
+        SqueezeDetector(SqueezeParams(), lambda: engine.session_id),
         lambda: source,
         lambda: ScriptedTracker(hands),
         now_ms=lambda: clock[0],
@@ -157,7 +156,7 @@ def test_open_failure_surfaces_error_and_inactive(engine: EnergyEngine) -> None:
 
     worker = VisionWorker(
         engine,
-        TapDetector(DetectorParams(), lambda: engine.session_id),
+        SqueezeDetector(SqueezeParams(), lambda: engine.session_id),
         lambda: source,
         tracker_factory,
     )
@@ -185,7 +184,7 @@ def test_no_signal_status(engine: EnergyEngine) -> None:
 
 def test_preview_callback_is_throttled(engine: EnergyEngine) -> None:
     calls: list[int] = []
-    frames = flat(0, 1000, fps=50)  # 50 frames in 1 s
+    frames = steady(0, 1000, fps=50)  # 50 frames in 1 s
     script, hands = hand_script(frames)
     run_worker(
         engine,
@@ -198,12 +197,12 @@ def test_preview_callback_is_throttled(engine: EnergyEngine) -> None:
 
 
 def test_calibration_session_receives_frames(engine: EnergyEngine) -> None:
-    frames = flat(0, 2500)
+    frames = steady(0, 2500)
     script, hands = hand_script(frames)
     source = ScriptedSource(script)
-    detector = TapDetector(DetectorParams(), lambda: engine.session_id)
+    detector = SqueezeDetector(SqueezeParams(), lambda: engine.session_id)
     worker = VisionWorker(engine, detector, lambda: source, lambda: ScriptedTracker(hands))
-    session = CalibrationSession(DetectorParams(), lambda: engine.session_id)
+    session = CalibrationSession(SqueezeParams(), lambda: engine.session_id)
     session.start(0)
     worker.set_calibration(session)
     worker.start()
@@ -211,7 +210,7 @@ def test_calibration_session_receives_frames(engine: EnergyEngine) -> None:
     while source._script:
         time.sleep(0.02)
     worker.stop()
-    assert session.prompt().step in ("noise", "countdown")
+    assert session.prompt().step in ("open", "fist", "squeeze")
 
 
 def test_stats_window() -> None:
