@@ -8,6 +8,7 @@ from taprivo.core.events import Finger
 from taprivo.vision.calibration import CalibrationResult, FingerCalibration
 from taprivo.vision.camera import CameraError
 from taprivo.vision.controller import VisionController
+from taprivo.vision.tracker import ModelError
 from tests.vision_helpers import IdleSource, NoHandTracker
 
 
@@ -35,6 +36,22 @@ def test_start_stop_lifecycle() -> None:
 def test_start_failure_raises_and_leaves_stopped() -> None:
     controller, _ = make(fail=True)
     with pytest.raises(CameraError):
+        controller.start(1)
+    assert controller.running is False
+
+
+def test_start_wraps_unexpected_tracker_error_in_model_error() -> None:
+    def raising_tracker_factory() -> NoHandTracker:
+        raise RuntimeError("mediapipe blew up")
+
+    engine = EnergyEngine(Config())
+    controller = VisionController(
+        engine,
+        Config(),
+        source_factory=lambda index, cfg, now_ms: IdleSource(),
+        tracker_factory=raising_tracker_factory,
+    )
+    with pytest.raises(ModelError, match="mediapipe blew up"):
         controller.start(1)
     assert controller.running is False
 

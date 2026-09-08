@@ -37,6 +37,9 @@ def window(qtbot: QtBot) -> tuple[CameraWindow, VisionController, EnergyEngine]:
     w = CameraWindow(controller, Config(), signals, devices_fn=lambda: DEVICES)
     qtbot.addWidget(w)
     w.show()
+    # Device probing now runs on a background thread; wait for it to land before
+    # tests rely on the combo/start button being populated.
+    qtbot.waitUntil(lambda: w.device_combo.count() == len(DEVICES), timeout=3000)
     return w, controller, engine
 
 
@@ -76,9 +79,47 @@ def test_start_failure_is_reported_not_raised(
     )
     w = CameraWindow(controller, Config(), VisionSignals(), devices_fn=lambda: DEVICES)
     qtbot.addWidget(w)
+    qtbot.waitUntil(lambda: w.device_combo.count() == len(DEVICES), timeout=3000)
     w.start_camera()
     assert not controller.running
     assert "permission" in w.status_text()
+
+
+def test_start_failure_from_unexpected_exception_is_reported_not_raised(
+    window: tuple, qtbot: QtBot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(
+        QMessageBox, "warning", staticmethod(lambda *a, **k: QMessageBox.StandardButton.Ok)
+    )
+    w, controller, _engine = window
+
+    def raise_runtime_error(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("boom from an unexpected code path")
+
+    monkeypatch.setattr(controller, "start", raise_runtime_error)
+    w.start_camera()  # must not raise, even though controller.start() escaped its own guards
+    assert not controller.running
+    assert "boom from an unexpected code path" in w.status_text()
+
+
+def test_start_camera_is_noop_while_refreshing(qtbot: QtBot) -> None:
+    engine = EnergyEngine(Config())
+    controller = VisionController(
+        engine,
+        Config(),
+        source_factory=lambda index, cfg, now_ms: IdleSource(index=index),
+        tracker_factory=NoHandTracker,
+    )
+    signals = VisionSignals()
+    w = CameraWindow(controller, Config(), signals, devices_fn=lambda: DEVICES)
+    qtbot.addWidget(w)
+    assert not w.start_button.isEnabled()  # still refreshing
+    w.start_camera()  # no-op: nothing selected/enabled yet
+    assert not controller.running
+    qtbot.waitUntil(lambda: w.device_combo.count() == len(DEVICES), timeout=3000)
+    assert w.start_button.isEnabled()
 
 
 def test_preview_packet_updates_pixmap_and_bars(window: tuple, qtbot: QtBot) -> None:
@@ -133,3 +174,11 @@ def test_export_writes_features_only(window: tuple, qtbot: QtBot, tmp_path: Path
     assert text.splitlines()[0].startswith("ts_ms,step,finger,thumb,index,middle,ring,pinky")
     assert "image" not in text
     w.stop_camera()
+
+
+def test_close_event_stops_the_camera(window: tuple, qtbot: QtBot) -> None:
+    w, controller, _engine = window
+    w.start_camera()
+    qtbot.waitUntil(lambda: controller.running, timeout=3000)
+    w.close()
+    qtbot.waitUntil(lambda: not controller.running, timeout=3000)

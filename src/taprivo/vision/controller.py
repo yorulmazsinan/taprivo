@@ -12,7 +12,7 @@ from taprivo.vision.calibration import CalibrationResult, CalibrationSession
 from taprivo.vision.camera import CameraError, CameraSource
 from taprivo.vision.detector import DetectorParams, TapDetector
 from taprivo.vision.frames import FrameStats
-from taprivo.vision.tracker import HandTracker, MediaPipeHandTracker
+from taprivo.vision.tracker import HandTracker, MediaPipeHandTracker, ModelError
 from taprivo.vision.worker import PreviewCallback, VisionWorker
 
 SourceFactory = Callable[[int, Config, Callable[[], int]], CameraSource]
@@ -79,8 +79,12 @@ class VisionController:
     def start(self, device_index: int, preview: PreviewCallback | None = None) -> None:
         if self.running:
             return
-        probe = self._tracker_factory()  # fail fast (model checksum, import) before the camera
-        probe.close()
+        try:
+            # fail fast (model checksum, import, GPU/OpenGL context) before the camera
+            probe = self._tracker_factory()
+            probe.close()
+        except Exception as exc:
+            raise ModelError(f"hand tracker could not start: {exc}") from exc
         worker = VisionWorker(
             self._engine,
             self._detector,

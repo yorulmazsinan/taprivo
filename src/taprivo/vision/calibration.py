@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import statistics
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
@@ -77,110 +78,120 @@ class CalibrationSession:
         self._s = _Progress()
         self._result: CalibrationResult | None = None
         self._rows: list[dict[str, float | int | str]] = []
+        # Reentrant because process() calls prompt() while already holding the lock,
+        # and both are called from the worker thread (process) and the UI thread
+        # (prompt, result, finished, export_rows) concurrently.
+        self._lock = threading.RLock()
 
     # -- lifecycle -----------------------------------------------------------
 
     def start(self, ts_ms: int) -> None:
-        self._s = _Progress(step_start=ts_ms)
-        self._result = None
-        self._rows = []
-        self._detector.reset()
+        with self._lock:
+            self._s = _Progress(step_start=ts_ms)
+            self._result = None
+            self._rows = []
+            self._detector.reset()
 
     @property
     def finished(self) -> bool:
-        return self._s.step == "done"
+        with self._lock:
+            return self._s.step == "done"
 
     def result(self) -> CalibrationResult | None:
-        return self._result
+        with self._lock:
+            return self._result
 
     def export_rows(self) -> list[dict[str, float | int | str]]:
-        return list(self._rows)
+        with self._lock:
+            return list(self._rows)
 
     # -- processing ----------------------------------------------------------
 
     def process(self, frame: HandFrame | None, ts_ms: int) -> CalibrationPrompt:
-        s = self._s
-        if frame is not None:
-            current = self._current_finger()
-            row: dict[str, float | int | str] = {
-                "ts_ms": ts_ms,
-                "step": s.step,
-                "finger": current.value if current is not None else "",
-            }
-            row.update({f.value: frame.features.c2[f] for f in Finger})
-            self._rows.append(row)
-        elapsed = ts_ms - s.step_start
-        if s.step == "visibility":
-            s.total += 1
+        with self._lock:
+            s = self._s
             if frame is not None:
-                s.seen += 1
-            if elapsed >= VISIBILITY_MS:
-                ratio = s.seen / s.total if s.total else 0.0
-                if ratio >= VISIBILITY_MIN:
-                    self._enter("noise", ts_ms)
-                else:
-                    s.visibility_failed = True
-                    s.seen = s.total = 0
-                    s.step_start = ts_ms
-        elif s.step == "noise":
-            if frame is not None:
-                for f in Finger:
-                    s.noise[f].append(frame.features.c2[f])
-            if elapsed >= NOISE_MS:
-                s.sigma = {
-                    f: statistics.pstdev(v) if len(v) >= 2 else 0.0 for f, v in s.noise.items()
+                current = self._current_finger()
+                row: dict[str, float | int | str] = {
+                    "ts_ms": ts_ms,
+                    "step": s.step,
+                    "finger": current.value if current is not None else "",
                 }
-                self._enter("countdown", ts_ms)
-        elif s.step == "countdown":
-            if elapsed >= COUNTDOWN_MS:
-                self._detector.reset()
-                self._enter("record", ts_ms)
-        elif s.step == "record":
-            finger = ORDER[s.finger_index]
-            for event in self._detector.process(frame, ts_ms):
-                if event.finger is finger:
-                    s.amplitudes[finger].append(event.displacement)
-            if elapsed >= RECORD_MS:
-                s.finger_index += 1
-                if s.finger_index >= len(ORDER):
-                    self._finish()
-                    self._enter("done", ts_ms)
-                else:
+                row.update({f.value: frame.features.c2[f] for f in Finger})
+                self._rows.append(row)
+            elapsed = ts_ms - s.step_start
+            if s.step == "visibility":
+                s.total += 1
+                if frame is not None:
+                    s.seen += 1
+                if elapsed >= VISIBILITY_MS:
+                    ratio = s.seen / s.total if s.total else 0.0
+                    if ratio >= VISIBILITY_MIN:
+                        self._enter("noise", ts_ms)
+                    else:
+                        s.visibility_failed = True
+                        s.seen = s.total = 0
+                        s.step_start = ts_ms
+            elif s.step == "noise":
+                if frame is not None:
+                    for f in Finger:
+                        s.noise[f].append(frame.features.c2[f])
+                if elapsed >= NOISE_MS:
+                    s.sigma = {
+                        f: statistics.pstdev(v) if len(v) >= 2 else 0.0 for f, v in s.noise.items()
+                    }
                     self._enter("countdown", ts_ms)
-        return self.prompt(ts_ms)
+            elif s.step == "countdown":
+                if elapsed >= COUNTDOWN_MS:
+                    self._detector.reset()
+                    self._enter("record", ts_ms)
+            elif s.step == "record":
+                finger = ORDER[s.finger_index]
+                for event in self._detector.process(frame, ts_ms):
+                    if event.finger is finger:
+                        s.amplitudes[finger].append(event.displacement)
+                if elapsed >= RECORD_MS:
+                    s.finger_index += 1
+                    if s.finger_index >= len(ORDER):
+                        self._finish()
+                        self._enter("done", ts_ms)
+                    else:
+                        self._enter("countdown", ts_ms)
+            return self.prompt(ts_ms)
 
     def prompt(self, ts_ms: int | None = None) -> CalibrationPrompt:
-        s = self._s
-        finger = self._current_finger()
-        now = ts_ms if ts_ms is not None else s.step_start
-        elapsed = max(0, now - s.step_start)
-        if s.step == "visibility":
-            text = (
-                "Move your hand into view"
-                if s.visibility_failed
-                else "Show your hand to the camera"
-            )
-            remaining = max(0, VISIBILITY_MS - elapsed)
-            done_steps = 0
-        elif s.step == "noise":
-            text = "Hold your hand still"
-            remaining = max(0, NOISE_MS - elapsed)
-            done_steps = 1
-        elif s.step == "countdown":
-            assert finger is not None
-            text = f"Get ready: {finger.value}"
-            remaining = max(0, COUNTDOWN_MS - elapsed)
-            done_steps = 2 + 2 * s.finger_index
-        elif s.step == "record":
-            assert finger is not None
-            text = f"Tap your {finger.value} finger {TARGET_TAPS} times"
-            remaining = max(0, RECORD_MS - elapsed)
-            done_steps = 3 + 2 * s.finger_index
-        else:
-            text = "Calibration complete"
-            remaining = 0
-            done_steps = TOTAL_STEPS
-        return CalibrationPrompt(s.step, finger, text, remaining, done_steps / TOTAL_STEPS)
+        with self._lock:
+            s = self._s
+            finger = self._current_finger()
+            now = ts_ms if ts_ms is not None else s.step_start
+            elapsed = max(0, now - s.step_start)
+            if s.step == "visibility":
+                text = (
+                    "Move your hand into view"
+                    if s.visibility_failed
+                    else "Show your hand to the camera"
+                )
+                remaining = max(0, VISIBILITY_MS - elapsed)
+                done_steps = 0
+            elif s.step == "noise":
+                text = "Hold your hand still"
+                remaining = max(0, NOISE_MS - elapsed)
+                done_steps = 1
+            elif s.step == "countdown":
+                assert finger is not None
+                text = f"Get ready: {finger.value}"
+                remaining = max(0, COUNTDOWN_MS - elapsed)
+                done_steps = 2 + 2 * s.finger_index
+            elif s.step == "record":
+                assert finger is not None
+                text = f"Tap your {finger.value} finger {TARGET_TAPS} times"
+                remaining = max(0, RECORD_MS - elapsed)
+                done_steps = 3 + 2 * s.finger_index
+            else:
+                text = "Calibration complete"
+                remaining = 0
+                done_steps = TOTAL_STEPS
+            return CalibrationPrompt(s.step, finger, text, remaining, done_steps / TOTAL_STEPS)
 
     # -- internals -----------------------------------------------------------
 

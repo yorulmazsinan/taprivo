@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import statistics
+import threading
 
 from taprivo.core.events import Finger
 from taprivo.vision.calibration import (
@@ -163,3 +164,38 @@ def test_sigma_uses_noise_window_only() -> None:
         statistics.mean(fc.threshold for fc in result.fingers.values())
         == DetectorParams().threshold
     )
+
+
+def test_concurrent_process_and_reads_are_thread_safe() -> None:
+    # Simulates the real deployment: the worker thread drives process() while
+    # the Qt tick timer concurrently reads prompt()/result()/finished/export_rows().
+    s = session()
+    frames = flat(0, VISIBILITY_MS + NOISE_MS + COUNTDOWN_MS, jitter=0.01)
+    errors: list[BaseException] = []
+
+    def writer() -> None:
+        try:
+            for f in frames:
+                s.process(f, f.ts_ms)
+        except BaseException as exc:
+            errors.append(exc)
+
+    def reader() -> None:
+        try:
+            for _ in range(500):
+                s.prompt()
+                s.result()
+                _ = s.finished
+                s.export_rows()
+        except BaseException as exc:
+            errors.append(exc)
+
+    writer_thread = threading.Thread(target=writer)
+    reader_thread = threading.Thread(target=reader)
+    writer_thread.start()
+    reader_thread.start()
+    writer_thread.join(timeout=5)
+    reader_thread.join(timeout=5)
+    assert not writer_thread.is_alive()
+    assert not reader_thread.is_alive()
+    assert not errors
