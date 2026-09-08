@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import Qt, QTimer, Slot
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
@@ -33,7 +35,13 @@ MCP_TEXT = {"starting": "Starting", "ready": "Ready", "error": "Error"}
 
 
 class HudWindow(QWidget):
-    def __init__(self, engine: EnergyEngine, simulator: Simulator, config: Config) -> None:
+    def __init__(
+        self,
+        engine: EnergyEngine,
+        simulator: Simulator,
+        config: Config,
+        on_open_camera: Callable[[], None] | None = None,
+    ) -> None:
         super().__init__()
         self._engine = engine
         self._simulator = simulator
@@ -90,11 +98,22 @@ class HudWindow(QWidget):
         self.reset_button.clicked.connect(self.confirm_reset)
         self.mcp_button = QPushButton("MCP Status")
         self.mcp_button.clicked.connect(self.show_mcp_status)
+        self.open_camera_button = QPushButton("Open Camera")
+        if on_open_camera is not None:
+            self.open_camera_button.clicked.connect(on_open_camera)
+        self.open_camera_button.setEnabled(on_open_camera is not None)
         buttons = QHBoxLayout()
-        for button in (self.toggle_button, self.reset_button, self.mcp_button):
+        for button in (
+            self.toggle_button,
+            self.reset_button,
+            self.mcp_button,
+            self.open_camera_button,
+        ):
             buttons.addWidget(button)
 
-        self.footer_label = QLabel("Keys 1-5 tap thumb…pinky. Balance resets when Taprivo quits.")
+        self.footer_label = QLabel(
+            "Keys 1-5 tap thumb…pinky (simulator). Balance resets when Taprivo quits."
+        )
         self.footer_label.setStyleSheet("color: gray; font-size: 11px;")
         self.footer_label.setWordWrap(True)
 

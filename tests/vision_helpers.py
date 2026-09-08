@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import csv
 import random
+import time
 from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 from weakref import WeakKeyDictionary
 
+import numpy as np
+
 from taprivo.core.events import Finger, Hand, TapEvent
+from taprivo.vision.camera import CameraError, CameraSource
 from taprivo.vision.detector import DetectorParams, TapDetector
 from taprivo.vision.features import compute_features
-from taprivo.vision.frames import FingerFeatures, HandFrame
+from taprivo.vision.frames import FingerFeatures, Frame, HandFrame
 
 DUMMY_LANDMARKS = tuple((0.5, 0.5, 0.0) for _ in range(21))
 
@@ -125,3 +129,39 @@ def replay_csv(path: Path, params: DetectorParams) -> list[TapEvent]:
                 )
             )
     return run(detector, frames)
+
+
+class IdleSource(CameraSource):
+    """Opens (or fails), yields blank frames slowly, records close()."""
+
+    def __init__(self, fail: bool = False, index: int = 1) -> None:
+        super().__init__(index=index, factory=lambda i: None)
+        self._fail = fail
+        self.closed = False
+        self._n = 0
+
+    def open(self) -> None:
+        if self._fail:
+            raise CameraError(
+                f"camera {self._index} could not be opened (permission denied or device missing)"
+            )
+
+    @property
+    def is_open(self) -> bool:
+        return not self.closed
+
+    def read(self) -> Frame | None:
+        time.sleep(0.01)
+        self._n += 1
+        return Frame(ts_ms=self._n * 40, image=np.full((48, 64, 3), 90, dtype=np.uint8))
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class NoHandTracker:
+    def process(self, frame: Frame) -> None:
+        return None
+
+    def close(self) -> None:
+        pass

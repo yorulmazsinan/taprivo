@@ -77,11 +77,11 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-def _launch(start_simulator: bool) -> None:
+def _launch(start_simulator: bool, open_camera: bool = False) -> None:
     config = load_config_or_exit(False)
     from taprivo.ui.app import run_app  # imported lazily so CLI-only commands stay light
 
-    raise typer.Exit(run_app(config, start_simulator=start_simulator))
+    raise typer.Exit(run_app(config, start_simulator=start_simulator, open_camera=open_camera))
 
 
 @app.callback()

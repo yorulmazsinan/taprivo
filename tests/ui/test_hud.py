@@ -4,6 +4,8 @@ import pytest
 from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
+from taprivo.config import Config
+from taprivo.core.energy import EnergyEngine
 from taprivo.ui import hud as hud_module
 from tests.ui.conftest import HudBundle
 
@@ -77,3 +79,20 @@ def test_auto_repeat_is_ignored(hud: HudBundle) -> None:
     event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_2, Qt.KeyboardModifier.NoModifier, "2", True)
     hud.window.keyPressEvent(event)
     assert hud.engine.snapshot().available == 0
+
+
+def test_open_camera_button_calls_back(qtbot: QtBot) -> None:
+    from taprivo.simulator import Simulator
+    from taprivo.ui.hud import HudWindow
+
+    calls: list[int] = []
+    engine = EnergyEngine(Config())
+    window = HudWindow(
+        engine, Simulator(engine, Config()), Config(), on_open_camera=lambda: calls.append(1)
+    )
+    qtbot.addWidget(window)
+    window.open_camera_button.click()
+    assert calls == [1]
+    plain = HudWindow(engine, Simulator(engine, Config()), Config())
+    qtbot.addWidget(plain)
+    assert not plain.open_camera_button.isEnabled()

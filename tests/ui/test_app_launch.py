@@ -59,3 +59,26 @@ def test_server_stopped_when_window_construction_fails(
     lock = paths.InstanceLock()
     assert lock.acquire()
     lock.release()
+
+
+def test_run_app_accepts_open_camera_flag_and_cli_forwards_it(
+    taprivo_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import inspect
+
+    import typer
+
+    import taprivo.ui.app as app_module
+    from taprivo import cli
+
+    assert "open_camera" in inspect.signature(app_module.run_app).parameters
+    seen: dict[str, object] = {}
+
+    def fake_run_app(config: object, *, start_simulator: bool, open_camera: bool = False) -> int:
+        seen.update(start_simulator=start_simulator, open_camera=open_camera)
+        return 0
+
+    monkeypatch.setattr(app_module, "run_app", fake_run_app)
+    with pytest.raises(typer.Exit):
+        cli._launch(False, open_camera=True)
+    assert seen == {"start_simulator": False, "open_camera": True}
