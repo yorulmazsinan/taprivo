@@ -7,16 +7,16 @@ from dataclasses import dataclass
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QImage
 
-from taprivo.vision.detector import DetectorState
 from taprivo.vision.frames import Frame, HandFrame
+from taprivo.vision.squeeze import SqueezeState
 from taprivo.vision.worker import PreviewCallback
 
 
 @dataclass(frozen=True)
 class PreviewPacket:
     image: QImage
-    hand: HandFrame | None
-    state: DetectorState
+    hands: tuple[HandFrame, ...]
+    state: SqueezeState
 
 
 class VisionSignals(QObject):
@@ -32,7 +32,7 @@ def _to_qimage(frame: Frame) -> QImage:
 
 
 def make_preview_callback(signals: VisionSignals) -> PreviewCallback:
-    def callback(frame: Frame, hand: HandFrame | None, state: DetectorState) -> None:
-        signals.preview.emit(PreviewPacket(_to_qimage(frame), hand, state))
+    def callback(frame: Frame, hands: tuple[HandFrame, ...], state: SqueezeState) -> None:
+        signals.preview.emit(PreviewPacket(_to_qimage(frame), hands, state))
 
     return callback

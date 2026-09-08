@@ -46,49 +46,66 @@ def available() -> bool:
 
 
 class HandTracker(Protocol):
-    def process(self, frame: Frame) -> HandFrame | None: ...
+    def process(self, frame: Frame) -> tuple[HandFrame, ...]: ...
 
     def close(self) -> None: ...
 
 
-class HandIdAssigner:
-    def __init__(self, gap_ms: int = HAND_GAP_MS) -> None:
+class _PerHandAssigner:
+    def __init__(self, gap_ms: int) -> None:
         self._gap_ms = gap_ms
         self._last_ts: int | None = None
-        self._last_hand: Hand | None = None
         self.current: str | None = None
 
-    def observe(self, ts_ms: int, hand: Hand) -> str:
+    def observe(self, ts_ms: int) -> str:
         gap = self._last_ts is not None and ts_ms - self._last_ts > self._gap_ms
-        if self.current is None or gap or hand != self._last_hand:
+        if self.current is None or gap:
             self.current = uuid.uuid4().hex
         self._last_ts = ts_ms
-        self._last_hand = hand
         return self.current
 
 
-def hand_frame_from_result(result: Any, ts_ms: int, ids: HandIdAssigner) -> HandFrame | None:
-    """Map a raw MediaPipe detection result onto a `HandFrame`, or `None`.
+class HandIdAssigner:
+    """Assigns a stable id per hand landmark track, keyed independently by handedness."""
+
+    def __init__(self, gap_ms: int = HAND_GAP_MS) -> None:
+        self._gap_ms = gap_ms
+        self._per_hand: dict[Hand, _PerHandAssigner] = {
+            hand: _PerHandAssigner(gap_ms) for hand in Hand
+        }
+        self.current: str | None = None
+
+    def observe(self, ts_ms: int, hand: Hand) -> str:
+        current = self._per_hand[hand].observe(ts_ms)
+        self.current = current
+        return current
+
+
+def hand_frame_from_result(result: Any, ts_ms: int, ids: HandIdAssigner) -> tuple[HandFrame, ...]:
+    """Map a raw MediaPipe detection result onto zero or more `HandFrame`s.
 
     Pure and mediapipe-free so it can be exercised directly with fake results.
     """
-    if not result.hand_landmarks:
-        return None
-    points = tuple((float(p.x), float(p.y), float(p.z)) for p in result.hand_landmarks[0])
-    try:
-        features = compute_features(points)
-    except DegenerateHandError:
-        return None
-    category = result.handedness[0][0]
-    hand = Hand.RIGHT if category.category_name == "Right" else Hand.LEFT
-    return HandFrame(
-        ts_ms=ts_ms,
-        hand=hand,
-        hand_id=ids.observe(ts_ms, hand),
-        score=float(category.score),
-        landmarks=points,
-        features=features,
-    )
+    frames: list[HandFrame] = []
+    for points_raw, categories in zip(result.hand_landmarks, result.handedness, strict=True):
+        points = tuple((float(p.x), float(p.y), float(p.z)) for p in points_raw)
+        try:
+            features = compute_features(points)
+        except DegenerateHandError:
+            continue
+        category = categories[0]
+        hand = Hand.RIGHT if category.category_name == "Right" else Hand.LEFT
+        frames.append(
+            HandFrame(
+                ts_ms=ts_ms,
+                hand=hand,
+                hand_id=ids.observe(ts_ms, hand),
+                score=float(category.score),
+                landmarks=points,
+                features=features,
+            )
+        )
+    return tuple(frames)
 
 
 class MediaPipeHandTracker:
@@ -97,6 +114,7 @@ class MediaPipeHandTracker:
         model: Path | None = None,
         min_confidence: float = 0.5,
         landmarker: Any | None = None,
+        num_hands: int = 2,
     ) -> None:
         """`landmarker` is a test seam: pass a fake to skip the mediapipe import and
         model load entirely (its `detect_for_video` receives the raw RGB ndarray
@@ -113,7 +131,7 @@ class MediaPipeHandTracker:
             options = vision.HandLandmarkerOptions(
                 base_options=BaseOptions(model_asset_path=str(path)),
                 running_mode=vision.RunningMode.VIDEO,
-                num_hands=1,
+                num_hands=num_hands,
                 min_hand_detection_confidence=min_confidence,
                 min_hand_presence_confidence=min_confidence,
                 min_tracking_confidence=min_confidence,
@@ -122,7 +140,7 @@ class MediaPipeHandTracker:
         self._ids = HandIdAssigner()
         self._last_ts = -1
 
-    def process(self, frame: Frame) -> HandFrame | None:
+    def process(self, frame: Frame) -> tuple[HandFrame, ...]:
         ts = frame.ts_ms if frame.ts_ms > self._last_ts else self._last_ts + 1
         self._last_ts = ts
         rgb = cv2.cvtColor(frame.image, cv2.COLOR_BGR2RGB)

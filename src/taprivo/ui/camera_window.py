@@ -19,14 +19,12 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from taprivo.config import Config
-from taprivo.core.events import Finger
+from taprivo.core.events import Finger, Hand
 from taprivo.ui.vision_bridge import PreviewPacket, VisionSignals, make_preview_callback
 from taprivo.vision.calibration import CalibrationResult, CalibrationSession
 from taprivo.vision.camera import CameraDevice, default_device, list_devices
@@ -66,6 +64,11 @@ STATUS_TEXT = {
     "no_signal": "No signal",
     "simulator": "Off",
 }
+PHASE_TEXT = {
+    "unknown": "Unknown",
+    "open": "Open",
+    "closed": "Closed",
+}
 
 
 class CameraWindow(QWidget):
@@ -99,18 +102,23 @@ class CameraWindow(QWidget):
         self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_label.setStyleSheet("background: #222; color: #ccc;")
         self.status_label = QLabel("")
-        self.bars: dict[Finger, QProgressBar] = {}
-        bars = QGridLayout()
-        for row, finger in enumerate(Finger):
-            bar = QProgressBar()
-            bar.setRange(0, 100)
-            bar.setTextVisible(False)
-            bar.setAccessibleName(f"{finger.value} movement")
+        self.levels_label = QLabel("")
+        self.meters: dict[Hand, QProgressBar] = {}
+        self.state_labels: dict[Hand, QLabel] = {}
+        meters = QGridLayout()
+        for row, hand in enumerate(Hand):
+            meter = QProgressBar()
+            meter.setRange(0, 100)
+            meter.setTextVisible(False)
+            meter.setAccessibleName(f"{hand.value} hand openness")
             if config.hud.reduced_motion:
-                bar.setStyleSheet("QProgressBar::chunk { margin: 0px; }")
-            self.bars[finger] = bar
-            bars.addWidget(QLabel(finger.value.title()), row, 0)
-            bars.addWidget(bar, row, 1)
+                meter.setStyleSheet("QProgressBar::chunk { margin: 0px; }")
+            self.meters[hand] = meter
+            state_label = QLabel("Not seen")
+            self.state_labels[hand] = state_label
+            meters.addWidget(QLabel(hand.value.title()), row, 0)
+            meters.addWidget(meter, row, 1)
+            meters.addWidget(state_label, row, 2)
 
         self.start_button = QPushButton("Start Camera")
         self.start_button.clicked.connect(self.start_camera)
@@ -124,10 +132,9 @@ class CameraWindow(QWidget):
         self.prompt_label = QLabel("")
         self.prompt_label.setStyleSheet("font-size: 15px; font-weight: 600;")
         self.countdown_label = QLabel("")
-        self.result_table = QTableWidget(0, 5)
-        self.result_table.setHorizontalHeaderLabels(
-            ["Finger", "Noise sigma", "Amplitude", "Taps", "Threshold"]
-        )
+        self.result_levels_label = QLabel("")
+        self.result_cycles_label = QLabel("")
+        self.result_status_label = QLabel("")
         self.apply_button = QPushButton("Apply")
         self.apply_button.clicked.connect(self.apply_calibration)
         self.apply_button.setEnabled(False)
@@ -152,14 +159,21 @@ class CameraWindow(QWidget):
         left.addWidget(self.preview_label)
         left.addWidget(self.status_label)
         body.addLayout(left)
-        body.addLayout(bars)
+        right = QVBoxLayout()
+        right.addWidget(self.levels_label)
+        right.addLayout(meters)
+        body.addLayout(right)
+        result_card = QHBoxLayout()
+        result_card.addWidget(self.result_levels_label)
+        result_card.addWidget(self.result_cycles_label)
+        result_card.addWidget(self.result_status_label)
         layout = QVBoxLayout(self)
         layout.addLayout(top)
         layout.addLayout(body)
         layout.addLayout(buttons)
         layout.addWidget(self.prompt_label)
         layout.addWidget(self.countdown_label)
-        layout.addWidget(self.result_table)
+        layout.addLayout(result_card)
         layout.addLayout(cal_buttons)
 
         self._timer = QTimer(self)
@@ -168,6 +182,7 @@ class CameraWindow(QWidget):
         self._timer.start()
         self.refresh_devices()
         self._render_status()
+        self._render_levels()
 
     # -- devices -------------------------------------------------------------
 
@@ -241,8 +256,9 @@ class CameraWindow(QWidget):
         self._session = None
         self.preview_label.setPixmap(QPixmap())
         self.preview_label.setText("Camera off")
-        for bar in self.bars.values():
-            bar.setValue(0)
+        for hand in Hand:
+            self.meters[hand].setValue(0)
+            self.state_labels[hand].setText("Not seen")
         self._render_status()
 
     # -- calibration ---------------------------------------------------------
@@ -253,25 +269,20 @@ class CameraWindow(QWidget):
             return None
         self._session = self._controller.begin_calibration()
         self._result = None
-        self.result_table.setRowCount(0)
+        self.result_levels_label.setText("")
+        self.result_cycles_label.setText("")
+        self.result_status_label.setText("")
         self.apply_button.setEnabled(False)
         self.export_button.setEnabled(True)
         return self._session
 
     def show_result(self, result: CalibrationResult) -> None:
         self._result = result
-        self.result_table.setRowCount(len(Finger))
-        for row, finger in enumerate(Finger):
-            fc = result.fingers[finger]
-            cells = [
-                finger.value.title(),
-                f"{fc.sigma:.3f}",
-                f"{fc.median_amplitude:.3f}",
-                str(fc.taps),
-                f"{fc.threshold:.2f} ({fc.status})",
-            ]
-            for col, text in enumerate(cells):
-                self.result_table.setItem(row, col, QTableWidgetItem(text))
+        self.result_levels_label.setText(
+            f"open {result.levels.open_level:.2f} · closed {result.levels.closed_level:.2f}"
+        )
+        self.result_cycles_label.setText(f"cycles: {result.cycles}")
+        self.result_status_label.setText(result.status)
         self.prompt_label.setText("Calibration complete")
         self.countdown_label.setText("")
         self.apply_button.setEnabled(True)
@@ -280,12 +291,14 @@ class CameraWindow(QWidget):
     def apply_calibration(self) -> None:
         if self._result is not None:
             self._controller.apply_calibration(self._result)
-            self.prompt_label.setText("Thresholds applied for this session")
+            self.prompt_label.setText("Levels applied for this session")
+            self._render_levels()
 
     @Slot()
     def use_defaults(self) -> None:
-        self._controller.reset_thresholds()
-        self.prompt_label.setText("Default thresholds in use")
+        self._controller.reset_levels()
+        self.prompt_label.setText("Default levels in use")
+        self._render_levels()
 
     def export_calibration(self, path: Path | None) -> None:
         if self._session is None:
@@ -298,7 +311,7 @@ class CameraWindow(QWidget):
                 return
             path = Path(chosen)
         rows = self._session.export_rows()
-        fields = ["ts_ms", "step", "finger", *[f.value for f in Finger]]
+        fields = ["ts_ms", "step", "hand", "openness", *[f.value for f in Finger]]
         with path.open("w", newline="", encoding="utf-8") as fh:
             writer = csv.DictWriter(fh, fieldnames=fields)
             writer.writeheader()
@@ -314,21 +327,25 @@ class CameraWindow(QWidget):
         pixmap = QPixmap.fromImage(packet.image).scaled(
             PREVIEW_W, PREVIEW_H, Qt.AspectRatioMode.KeepAspectRatio
         )
-        if packet.hand is not None:
+        if packet.hands:
             painter = QPainter(pixmap)
-            painter.setPen(QPen(QColor("#4fd1c5"), 2))
             w, h = pixmap.width(), pixmap.height()
-            pts = [(x * w, y * h) for x, y, _ in packet.hand.landmarks]
-            for a, b in CONNECTIONS:
-                painter.drawLine(int(pts[a][0]), int(pts[a][1]), int(pts[b][0]), int(pts[b][1]))
-            painter.setPen(QPen(QColor("#f6e05e"), 5))
-            for x, y in pts:
-                painter.drawPoint(int(x), int(y))
+            for hand_frame in packet.hands:
+                painter.setPen(QPen(QColor("#4fd1c5"), 2))
+                pts = [(x * w, y * h) for x, y, _ in hand_frame.landmarks]
+                for a, b in CONNECTIONS:
+                    painter.drawLine(int(pts[a][0]), int(pts[a][1]), int(pts[b][0]), int(pts[b][1]))
+                painter.setPen(QPen(QColor("#f6e05e"), 5))
+                for x, y in pts:
+                    painter.drawPoint(int(x), int(y))
             painter.end()
         self.preview_label.setPixmap(pixmap)
-        for finger, state in packet.state.fingers.items():
-            ratio = min(abs(state.deviation) / state.threshold, 2.0) if state.threshold else 0.0
-            self.bars[finger].setValue(int(ratio * 50))
+        for hand, hand_state in packet.state.hands.items():
+            self.meters[hand].setValue(int(max(0.0, min(1.0, hand_state.ema)) * 100))
+            if not hand_state.seen:
+                self.state_labels[hand].setText("Not seen")
+            else:
+                self.state_labels[hand].setText(PHASE_TEXT.get(hand_state.phase, hand_state.phase))
 
     def status_text(self) -> str:
         stats = self._controller.stats()
@@ -346,6 +363,12 @@ class CameraWindow(QWidget):
         self.stop_button.setEnabled(running)
         self.calibrate_button.setEnabled(running)
         self.status_label.setText(self.status_text())
+
+    def _render_levels(self) -> None:
+        levels = self._controller.levels()
+        self.levels_label.setText(
+            f"open {levels.open_level:.2f} · closed {levels.closed_level:.2f}"
+        )
 
     def _tick(self) -> None:
         try:

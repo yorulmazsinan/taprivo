@@ -8,15 +8,15 @@ from pytestqt.qtbot import QtBot
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
-from taprivo.core.events import Finger
+from taprivo.core.events import Hand
 from taprivo.ui.camera_window import CameraWindow
 from taprivo.ui.vision_bridge import VisionSignals, make_preview_callback
-from taprivo.vision.calibration import CalibrationResult, FingerCalibration
+from taprivo.vision.calibration import CalibrationResult
 from taprivo.vision.camera import CameraDevice
 from taprivo.vision.controller import VisionController
-from taprivo.vision.detector import DetectorParams, TapDetector
 from taprivo.vision.frames import Frame
-from tests.vision_helpers import IdleSource, NoHandTracker, hand_frame
+from taprivo.vision.squeeze import Levels, SqueezeDetector, SqueezeParams
+from tests.vision_helpers import IdleSource, NoHandTracker, hands_frame
 
 DEVICES = [
     CameraDevice(0, "Camera 0 (1920x1080) — no signal", 1920, 1080, False),
@@ -122,23 +122,23 @@ def test_start_camera_is_noop_while_refreshing(qtbot: QtBot) -> None:
     assert w.start_button.isEnabled()
 
 
-def test_preview_packet_updates_pixmap_and_bars(window: tuple, qtbot: QtBot) -> None:
+def test_preview_packet_updates_pixmap_and_meters(window: tuple, qtbot: QtBot) -> None:
     w, _controller, _engine = window
     callback = make_preview_callback(w.signals)
     frame = Frame(ts_ms=100, image=np.full((48, 64, 3), 120, dtype=np.uint8))
-    hand = hand_frame(100, {Finger.INDEX: 0.3})
-    detector = TapDetector(DetectorParams(), lambda: "s")
-    detector.process(hand_frame(0, {}), 0)
-    detector.process(hand, 100)
-    callback(frame, hand, detector.state())
+    hands = hands_frame(100, {Hand.RIGHT: 0.9})
+    detector = SqueezeDetector(SqueezeParams(), lambda: "s")
+    detector.process(hands, 100)
+    callback(frame, hands, detector.state())
 
     def has_pixmap() -> bool:
         pixmap = w.preview_label.pixmap()
         return pixmap is not None and not pixmap.isNull()
 
     qtbot.waitUntil(has_pixmap, timeout=2000)
-    qtbot.waitUntil(lambda: w.bars[Finger.INDEX].value() > 0, timeout=2000)
-    assert w.bars[Finger.RING].value() == 0
+    qtbot.waitUntil(lambda: w.meters[Hand.RIGHT].value() > 0, timeout=2000)
+    assert w.meters[Hand.LEFT].value() == 0
+    assert w.state_labels[Hand.LEFT].text() == "Not seen"
 
 
 def test_calibration_flow_and_apply(window: tuple, qtbot: QtBot) -> None:
@@ -148,17 +148,15 @@ def test_calibration_flow_and_apply(window: tuple, qtbot: QtBot) -> None:
     w.begin_calibration()
     assert controller.calibration is not None
     qtbot.waitUntil(lambda: "hand" in w.prompt_label.text().lower(), timeout=2000)
-    result = CalibrationResult(
-        fingers={f: FingerCalibration(f, 0.01, 0.4, 5, 0.3, "ok") for f in Finger},
-        thresholds={f: 0.3 for f in Finger},
-    )
+    result = CalibrationResult(levels=Levels(0.9, 0.3), cycles=5, status="ok")
     w.show_result(result)
-    assert w.result_table.rowCount() == 5
+    assert "0.90" in w.result_levels_label.text()
+    assert "5" in w.result_cycles_label.text()
     assert w.apply_button.isEnabled()
     w.apply_calibration()
-    assert controller.thresholds()[Finger.INDEX] == 0.3
+    assert controller.levels() == Levels(0.9, 0.3)
     w.use_defaults()
-    assert controller.thresholds()[Finger.INDEX] == 0.22
+    assert controller.levels() == Levels(0.80, 0.45)
     w.stop_camera()
 
 
@@ -167,11 +165,11 @@ def test_export_writes_features_only(window: tuple, qtbot: QtBot, tmp_path: Path
     w.start_camera()
     qtbot.waitUntil(lambda: controller.running, timeout=3000)
     session = w.begin_calibration()
-    session.process(hand_frame(10, {Finger.INDEX: 0.5}), 10)
+    session.process(hands_frame(10, {Hand.RIGHT: 0.5}), 10)
     out = tmp_path / "cal.csv"
     w.export_calibration(out)
     text = out.read_text()
-    assert text.splitlines()[0].startswith("ts_ms,step,finger,thumb,index,middle,ring,pinky")
+    assert text.splitlines()[0].startswith("ts_ms,step,hand,openness,thumb,index,middle,ring,pinky")
     assert "image" not in text
     w.stop_camera()
 

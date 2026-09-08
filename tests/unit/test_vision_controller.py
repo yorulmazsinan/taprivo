@@ -4,10 +4,10 @@ import pytest
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
-from taprivo.core.events import Finger
-from taprivo.vision.calibration import CalibrationResult, FingerCalibration
+from taprivo.vision.calibration import CalibrationResult
 from taprivo.vision.camera import CameraError
 from taprivo.vision.controller import VisionController
+from taprivo.vision.squeeze import Levels
 from taprivo.vision.tracker import ModelError
 from tests.vision_helpers import IdleSource, NoHandTracker
 
@@ -56,35 +56,29 @@ def test_start_wraps_unexpected_tracker_error_in_model_error() -> None:
     assert controller.running is False
 
 
-def test_calibration_apply_and_reset_thresholds() -> None:
+def test_calibration_apply_and_reset_levels() -> None:
     controller, _ = make()
-    assert controller.thresholds()[Finger.INDEX] == 0.22
-    result = CalibrationResult(
-        fingers={f: FingerCalibration(f, 0.01, 0.4, 5, 0.3, "ok") for f in Finger},
-        thresholds={f: 0.3 for f in Finger},
-    )
+    assert controller.levels() == Levels(0.80, 0.45)
+    result = CalibrationResult(levels=Levels(0.9, 0.3), cycles=5, status="ok")
     controller.apply_calibration(result)
-    assert controller.thresholds()[Finger.PINKY] == 0.3
-    controller.reset_thresholds()
-    assert controller.thresholds()[Finger.PINKY] == 0.22
+    assert controller.levels() == Levels(0.9, 0.3)
+    controller.reset_levels()
+    assert controller.levels() == Levels(0.80, 0.45)
 
 
-def test_calibration_apply_and_reset_thresholds_while_running() -> None:
-    # Same flow as above, but with a live worker: apply_calibration/thresholds/
-    # reset_thresholds must route through the worker's lock rather than
-    # touching the shared TapDetector directly from another thread.
+def test_calibration_apply_and_reset_levels_while_running() -> None:
+    # Same flow as above, but with a live worker: apply_calibration/levels/
+    # reset_levels must route through the worker's lock rather than
+    # touching the shared SqueezeDetector directly from another thread.
     controller, _ = make()
     controller.start(1)
     try:
-        assert controller.thresholds()[Finger.INDEX] == 0.22
-        result = CalibrationResult(
-            fingers={f: FingerCalibration(f, 0.01, 0.4, 5, 0.3, "ok") for f in Finger},
-            thresholds={f: 0.3 for f in Finger},
-        )
+        assert controller.levels() == Levels(0.80, 0.45)
+        result = CalibrationResult(levels=Levels(0.9, 0.3), cycles=5, status="ok")
         controller.apply_calibration(result)
-        assert controller.thresholds()[Finger.PINKY] == 0.3
-        controller.reset_thresholds()
-        assert controller.thresholds()[Finger.PINKY] == 0.22
+        assert controller.levels() == Levels(0.9, 0.3)
+        controller.reset_levels()
+        assert controller.levels() == Levels(0.80, 0.45)
     finally:
         controller.stop()
 
