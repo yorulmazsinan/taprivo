@@ -22,13 +22,12 @@ from taprivo.core.energy import EnergyEngine
 from taprivo.core.events import Finger
 from taprivo.core.state import AppSnapshot
 from taprivo.simulator import Simulator
-from taprivo.ui.theme import DARK, Palette, resolve
+from taprivo.ui.theme import Palette, resolve
 from taprivo.ui.widgets import Chip, EnergyBar, StatusDot, StatusKind
 
 RENDER_INTERVAL_MS = 33
 WINDOW_WIDTH = 380
 CONTENT_MARGIN = 16
-CORNER_RADIUS = 14
 TRACKING_TEXT = {
     "inactive": "Inactive",
     "simulator": "Simulator running",
@@ -54,6 +53,8 @@ class HudWindow(QWidget):
         simulator: Simulator,
         config: Config,
         on_open_camera: Callable[[], None] | None = None,
+        *,
+        palette: Palette | None = None,
     ) -> None:
         super().__init__()
         self._engine = engine
@@ -61,10 +62,12 @@ class HudWindow(QWidget):
         self._config = config
         self._pending: AppSnapshot | None = None
         self._latest: AppSnapshot | None = None
-        app = QApplication.instance()
-        self._palette: Palette = resolve(
-            config.hud.theme, app if isinstance(app, QApplication) else None
-        )
+        if palette is not None:
+            self._palette: Palette = palette
+        else:
+            app = QApplication.instance()
+            qt_app = app if isinstance(app, QApplication) else None
+            self._palette = resolve(config.hud.theme, qt_app)
 
         self.setWindowTitle("Taprivo")
         flags = Qt.WindowType.Window
@@ -72,7 +75,6 @@ class HudWindow(QWidget):
             flags |= Qt.WindowType.WindowStaysOnTopHint
         self.setWindowFlags(flags)
         self.setWindowOpacity(config.hud.opacity)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedWidth(WINDOW_WIDTH)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
@@ -110,8 +112,8 @@ class HudWindow(QWidget):
         self.fingers_label.hide()
         self.chips: dict[Finger, Chip] = {}
         chip_row = QGridLayout()
-        chip_row.setHorizontalSpacing(6)
-        chip_row.setVerticalSpacing(6)
+        chip_row.setHorizontalSpacing(8)
+        chip_row.setVerticalSpacing(8)
         for index, finger in enumerate(Finger):
             chip = Chip(palette=palette)
             chip.setChip(palette.finger[finger], finger.value.title(), 0)
@@ -149,8 +151,8 @@ class HudWindow(QWidget):
             self.open_camera_button.clicked.connect(on_open_camera)
         self.open_camera_button.setEnabled(on_open_camera is not None)
         buttons = QGridLayout()
-        buttons.setHorizontalSpacing(6)
-        buttons.setVerticalSpacing(6)
+        buttons.setHorizontalSpacing(8)
+        buttons.setVerticalSpacing(8)
         for index, button in enumerate(
             (
                 self.toggle_button,
@@ -182,14 +184,13 @@ class HudWindow(QWidget):
     # -- painting --------------------------------------------------------------
 
     def paintEvent(self, event: QPaintEvent) -> None:  # noqa: N802 (Qt override)
+        # Opaque, square-cornered background in both themes: a translucent,
+        # rounded top-level window would sit under the native macOS title
+        # bar's square frame, and a frameless window is out of scope here.
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(self._palette.surface))
-        if self._palette is DARK:
-            painter.drawRoundedRect(self.rect(), CORNER_RADIUS, CORNER_RADIUS)
-        else:
-            painter.drawRect(self.rect())
+        painter.drawRect(self.rect())
         painter.end()
         super().paintEvent(event)
 
