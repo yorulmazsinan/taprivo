@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 
 import numpy as np
@@ -101,11 +102,13 @@ def test_taps_reach_engine_and_tracking_becomes_active(engine: EnergyEngine) -> 
     frames = flat(0, 600) + pulse(600, Finger.INDEX, 0.5) + flat(940, 600)
     script, hands = hand_script(frames)
     source = ScriptedSource(script)
-    worker = run_worker(engine, source, ScriptedTracker(hands))
+    tracker = ScriptedTracker(hands)
+    worker = run_worker(engine, source, tracker)
     snap = engine.snapshot()
     assert snap.taps_per_finger[Finger.INDEX] == 1
     assert snap.available == 10
     assert source.closed
+    assert tracker.closed  # run()'s finally closes the tracker alongside the source
     assert worker.error is None
     assert snap.camera_fps > 0 and 0 < snap.detection_ratio <= 1
     assert snap.tracking == "inactive"  # stop() resets tracking
@@ -145,17 +148,28 @@ def test_stale_when_no_frames_arrive(engine: EnergyEngine) -> None:
 
 def test_open_failure_surfaces_error_and_inactive(engine: EnergyEngine) -> None:
     source = ScriptedSource([], fail_open=True)
+    tracker_calls: list[ScriptedTracker] = []
+
+    def tracker_factory() -> ScriptedTracker:
+        tracker = ScriptedTracker({})
+        tracker_calls.append(tracker)
+        return tracker
+
     worker = VisionWorker(
         engine,
         TapDetector(DetectorParams(), lambda: engine.session_id),
         lambda: source,
-        lambda: ScriptedTracker({}),
+        tracker_factory,
     )
     worker.start()
     worker.join(2.0)
     assert not worker.is_alive()
     assert worker.error is not None and "permission" in worker.error
     assert engine.snapshot().tracking == "inactive"
+    # run()'s try block only reaches `tracker = self._tracker_factory()` after
+    # `source.open()` succeeds, so a failed open means the tracker is never
+    # constructed at all (nothing to close).
+    assert tracker_calls == []
 
 
 def test_no_signal_status(engine: EnergyEngine) -> None:
@@ -210,3 +224,41 @@ def test_stats_window() -> None:
     assert 18 <= s.processed_fps <= 20
     assert abs(s.detection_ratio - 0.5) < 0.01
     assert s.last_frame_age_ms == 50
+
+
+def test_stats_window_thread_safety() -> None:
+    """`captured`/`processed` are fed from the worker thread while `stats`/
+    `detection_ratio` may be read from another (e.g. the UI thread polling for
+    a HUD update); StatsWindow must not corrupt its deques under that race."""
+    w = StatsWindow(window_ms=200)
+    stop = threading.Event()
+    errors: list[BaseException] = []
+
+    def feed() -> None:
+        try:
+            ts = 0
+            while not stop.is_set():
+                w.captured(ts)
+                w.processed(ts, detected=ts % 2 == 0)
+                ts += 1
+        except BaseException as exc:
+            errors.append(exc)
+
+    def read() -> None:
+        try:
+            while not stop.is_set():
+                w.stats(1_000_000_000)
+                w.detection_ratio(1_000_000_000, 200)
+        except BaseException as exc:
+            errors.append(exc)
+
+    feeder = threading.Thread(target=feed)
+    reader = threading.Thread(target=read)
+    feeder.start()
+    reader.start()
+    time.sleep(0.3)
+    stop.set()
+    feeder.join(2.0)
+    reader.join(2.0)
+    assert not feeder.is_alive() and not reader.is_alive()
+    assert errors == []

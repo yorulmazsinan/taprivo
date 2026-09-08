@@ -9,7 +9,7 @@ from collections import deque
 from collections.abc import Callable
 
 from taprivo.core.energy import EnergyEngine
-from taprivo.core.events import TapEvent, now_monotonic_ms
+from taprivo.core.events import Finger, TapEvent, now_monotonic_ms
 from taprivo.core.state import TrackingStatus
 from taprivo.vision.calibration import CalibrationSession
 from taprivo.vision.camera import STALE_MS, CameraSource
@@ -25,20 +25,26 @@ TRACKING_MIN_RATIO = 0.5
 
 
 class StatsWindow:
+    """Thread-safe: `captured`/`processed` are fed from the worker loop while
+    `stats`/`detection_ratio` may be read concurrently from another thread."""
+
     def __init__(self, window_ms: int = 2000) -> None:
         self._window = window_ms
         self._captured: deque[int] = deque()
         self._processed: deque[tuple[int, bool]] = deque()
+        self._lock = threading.Lock()
 
     def captured(self, ts_ms: int) -> None:
-        self._captured.append(ts_ms)
-        self._trim(ts_ms)
+        with self._lock:
+            self._captured.append(ts_ms)
+            self._trim_locked(ts_ms)
 
     def processed(self, ts_ms: int, detected: bool) -> None:
-        self._processed.append((ts_ms, detected))
-        self._trim(ts_ms)
+        with self._lock:
+            self._processed.append((ts_ms, detected))
+            self._trim_locked(ts_ms)
 
-    def _trim(self, now_ms: int) -> None:
+    def _trim_locked(self, now_ms: int) -> None:
         cutoff = now_ms - self._window
         while self._captured and self._captured[0] < cutoff:
             self._captured.popleft()
@@ -46,17 +52,23 @@ class StatsWindow:
             self._processed.popleft()
 
     def detection_ratio(self, now_ms: int, window_ms: int) -> float:
-        recent = [d for ts, d in self._processed if ts >= now_ms - window_ms]
+        with self._lock:
+            recent = [d for ts, d in self._processed if ts >= now_ms - window_ms]
         return sum(recent) / len(recent) if recent else 0.0
 
     def stats(self, now_ms: int) -> FrameStats:
-        self._trim(now_ms)
-        seconds = self._window / 1000
-        last = self._captured[-1] if self._captured else None
+        with self._lock:
+            self._trim_locked(now_ms)
+            seconds = self._window / 1000
+            last = self._captured[-1] if self._captured else None
+            recent = [d for ts, d in self._processed if ts >= now_ms - self._window]
+            captured_fps = round(len(self._captured) / seconds, 1)
+            processed_fps = round(len(self._processed) / seconds, 1)
+        detection_ratio = sum(recent) / len(recent) if recent else 0.0
         return FrameStats(
-            captured_fps=round(len(self._captured) / seconds, 1),
-            processed_fps=round(len(self._processed) / seconds, 1),
-            detection_ratio=round(self.detection_ratio(now_ms, self._window), 3),
+            captured_fps=captured_fps,
+            processed_fps=processed_fps,
+            detection_ratio=round(detection_ratio, 3),
             last_frame_age_ms=(now_ms - last) if last is not None else 0,
         )
 
@@ -102,8 +114,8 @@ class VisionWorker(threading.Thread):
         self.join(timeout)
 
     def stats(self) -> FrameStats:
-        with self._lock:
-            return self._stats.stats(self._last_frame_ts)
+        # StatsWindow guards its own state; no need for the worker lock here.
+        return self._stats.stats(self._last_frame_ts)
 
     def set_calibration(self, session: CalibrationSession | None) -> None:
         with self._lock:
@@ -113,6 +125,14 @@ class VisionWorker(threading.Thread):
     def calibration(self) -> CalibrationSession | None:
         with self._lock:
             return self._calibration
+
+    def apply_thresholds(self, thresholds: dict[Finger, float]) -> None:
+        with self._lock:
+            self._detector.set_thresholds(thresholds)
+
+    def thresholds(self) -> dict[Finger, float]:
+        with self._lock:
+            return self._detector.thresholds()
 
     # -- loop ----------------------------------------------------------------
 
@@ -175,8 +195,10 @@ class VisionWorker(threading.Thread):
                 last_stats = frame.ts_ms
             if self._preview is not None and frame.ts_ms - last_preview >= self._preview_interval:
                 last_preview = frame.ts_ms
+                with self._lock:
+                    state = self._detector.state()
                 try:
-                    self._preview(frame, hand, self._detector.state())
+                    self._preview(frame, hand, state)
                 except Exception:
                     log.exception("preview callback failed")
 

@@ -45,7 +45,7 @@ def make(fail: bool = False) -> tuple[VisionController, EnergyEngine]:
     controller = VisionController(
         engine,
         Config(),
-        source_factory=lambda index, cfg: IdleSource(fail),
+        source_factory=lambda index, cfg, now_ms: IdleSource(fail),
         tracker_factory=NoHandTracker,
     )
     return controller, engine
@@ -79,6 +79,26 @@ def test_calibration_apply_and_reset_thresholds() -> None:
     assert controller.thresholds()[Finger.PINKY] == 0.3
     controller.reset_thresholds()
     assert controller.thresholds()[Finger.PINKY] == 0.22
+
+
+def test_calibration_apply_and_reset_thresholds_while_running() -> None:
+    # Same flow as above, but with a live worker: apply_calibration/thresholds/
+    # reset_thresholds must route through the worker's lock rather than
+    # touching the shared TapDetector directly from another thread.
+    controller, _ = make()
+    controller.start(1)
+    try:
+        assert controller.thresholds()[Finger.INDEX] == 0.22
+        result = CalibrationResult(
+            fingers={f: FingerCalibration(f, 0.01, 0.4, 5, 0.3, "ok") for f in Finger},
+            thresholds={f: 0.3 for f in Finger},
+        )
+        controller.apply_calibration(result)
+        assert controller.thresholds()[Finger.PINKY] == 0.3
+        controller.reset_thresholds()
+        assert controller.thresholds()[Finger.PINKY] == 0.22
+    finally:
+        controller.stop()
 
 
 def test_begin_calibration_requires_running_worker() -> None:
