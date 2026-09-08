@@ -180,3 +180,19 @@ def test_close_event_stops_the_camera(window: tuple, qtbot: QtBot) -> None:
     qtbot.waitUntil(lambda: controller.running, timeout=3000)
     w.close()
     qtbot.waitUntil(lambda: not controller.running, timeout=3000)
+
+
+def test_snapshot_renders_minimum_size_and_colors(window: tuple) -> None:
+    w, _controller, _engine = window
+    assert w.width() >= 760
+    assert w.height() >= 560
+    image = w.grab().toImage()
+    colors: set[int] = set()
+    for y in range(image.height()):
+        for x in range(image.width()):
+            colors.add(image.pixel(x, y))
+            if len(colors) > 2:
+                break
+        if len(colors) > 2:
+            break
+    assert len(colors) > 2

@@ -111,6 +111,7 @@ hud:
   always_on_top: true
   opacity: 0.92
   reduced_motion: false
+  theme: system   # system | dark | light
 ```
 
 If port 32145 is taken, the HUD shows `MCP: Error`; set `server.port` and run

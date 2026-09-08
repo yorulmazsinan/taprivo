@@ -78,3 +78,23 @@ def test_camera_override(taprivo_home: Path) -> None:
     cfg = load_config()
     assert cfg.camera.device_index == 1
     assert cfg.squeeze.cooldown_ms == 500
+
+
+def test_hud_theme_defaults_to_system(taprivo_home: Path) -> None:
+    cfg = load_config()
+    assert cfg.hud.theme == "system"
+
+
+@pytest.mark.parametrize("theme", ["system", "dark", "light"])
+def test_hud_theme_accepts_known_values(taprivo_home: Path, theme: str) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text(f"hud:\n  theme: {theme}\n")
+    cfg = load_config()
+    assert cfg.hud.theme == theme
+
+
+def test_hud_theme_rejects_unknown_value(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text("hud:\n  theme: neon\n")
+    with pytest.raises(ConfigError, match="theme"):
+        load_config()

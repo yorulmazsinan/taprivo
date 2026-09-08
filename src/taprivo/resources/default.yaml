@@ -18,6 +18,7 @@ hud:
   always_on_top: true
   opacity: 0.92
   reduced_motion: false
+  theme: system
 camera:
   device_index: null
   width: 640
