@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
     QFileDialog,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -45,7 +46,6 @@ log = logging.getLogger(__name__)
 
 PREVIEW_W, PREVIEW_H = 480, 360
 PREVIEW_RADIUS = 12
-CARD_RADIUS = 12
 TICK_MS = 100
 CONNECTIONS = [
     (0, 1),
@@ -82,6 +82,7 @@ PHASE_TEXT = {
     "open": "Open",
     "closed": "Closed",
 }
+IDLE_HINT_TEXT = "Press Calibrate to tune the open/closed levels for your hand."
 
 
 class CameraWindow(QWidget):
@@ -92,6 +93,7 @@ class CameraWindow(QWidget):
         signals: VisionSignals,
         *,
         devices_fn: Callable[[], list[CameraDevice]] = list_devices,
+        palette: Palette | None = None,
     ) -> None:
         super().__init__()
         self._controller = controller
@@ -107,10 +109,13 @@ class CameraWindow(QWidget):
         self.signals.devices.connect(self.on_devices, Qt.ConnectionType.QueuedConnection)
         self.setWindowTitle("Taprivo Camera")
 
-        app = QApplication.instance()
-        self._palette: Palette = resolve(
-            config.hud.theme, app if isinstance(app, QApplication) else None
-        )
+        if palette is not None:
+            self._palette: Palette = palette
+        else:
+            app = QApplication.instance()
+            self._palette = resolve(
+                config.hud.theme, app if isinstance(app, QApplication) else None
+            )
         palette = self._palette
         self.setMinimumSize(760, 560)
 
@@ -175,7 +180,6 @@ class CameraWindow(QWidget):
         countdown_font = QFont()
         countdown_font.setPixelSize(40)
         countdown_font.setWeight(QFont.Weight.Bold)
-        countdown_font.setStyleHint(QFont.StyleHint.Monospace)
         self.countdown_label.setFont(countdown_font)
         self.countdown_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.calibration_progress = QProgressBar()
@@ -200,12 +204,12 @@ class CameraWindow(QWidget):
         top.addWidget(self.refresh_button)
 
         buttons = QHBoxLayout()
-        buttons.setSpacing(6)
+        buttons.setSpacing(8)
         for b in (self.start_button, self.stop_button, self.calibrate_button):
             buttons.addWidget(b)
 
         cal_buttons = QHBoxLayout()
-        cal_buttons.setSpacing(6)
+        cal_buttons.setSpacing(8)
         for b in (self.apply_button, self.defaults_button, self.export_button):
             cal_buttons.addWidget(b)
 
@@ -226,10 +230,8 @@ class CameraWindow(QWidget):
         result_card.addWidget(self.result_cycles_label)
         result_card.addWidget(self.result_status_label)
 
-        self.calibration_card = QWidget()
-        self.calibration_card.setStyleSheet(
-            f"background-color: {palette.surface}; border-radius: {CARD_RADIUS}px;"
-        )
+        self.calibration_card = QFrame()
+        self.calibration_card.setObjectName("card")
         card_layout = QVBoxLayout(self.calibration_card)
         card_layout.setContentsMargins(16, 16, 16, 16)
         card_layout.setSpacing(8)
@@ -254,6 +256,16 @@ class CameraWindow(QWidget):
         self.refresh_devices()
         self._render_status()
         self._render_levels()
+        self._show_idle_hint()
+
+    # -- prompt --------------------------------------------------------------
+
+    def _set_prompt(self, text: str, *, dim: bool = False) -> None:
+        self.prompt_label.setStyleSheet(f"color: {self._palette.text_dim};" if dim else "")
+        self.prompt_label.setText(text)
+
+    def _show_idle_hint(self) -> None:
+        self._set_prompt(IDLE_HINT_TEXT, dim=True)
 
     # -- devices -------------------------------------------------------------
 
@@ -333,6 +345,7 @@ class CameraWindow(QWidget):
             self.meters[hand].setState("Not seen")
             self.state_labels[hand].setText("Not seen")
         self._render_status()
+        self._show_idle_hint()
 
     # -- calibration ---------------------------------------------------------
 
@@ -356,7 +369,7 @@ class CameraWindow(QWidget):
         )
         self.result_cycles_label.setText(f"cycles: {result.cycles}")
         self.result_status_label.setText(result.status)
-        self.prompt_label.setText("Calibration complete")
+        self._set_prompt("Calibration complete")
         self.countdown_label.setText("")
         self.calibration_progress.setValue(100)
         self.apply_button.setEnabled(True)
@@ -365,13 +378,13 @@ class CameraWindow(QWidget):
     def apply_calibration(self) -> None:
         if self._result is not None:
             self._controller.apply_calibration(self._result)
-            self.prompt_label.setText("Levels applied for this session")
+            self._set_prompt("Levels applied for this session")
             self._render_levels()
 
     @Slot()
     def use_defaults(self) -> None:
         self._controller.reset_levels()
-        self.prompt_label.setText("Default levels in use")
+        self._set_prompt("Default levels in use")
         self._render_levels()
 
     def export_calibration(self, path: Path | None) -> None:
@@ -471,7 +484,7 @@ class CameraWindow(QWidget):
             if session is None:
                 return
             prompt = session.prompt(self._controller.now_ms())
-            self.prompt_label.setText(prompt.text)
+            self._set_prompt(prompt.text)
             self.countdown_label.setText(
                 f"{prompt.remaining_ms / 1000:.1f} s" if prompt.remaining_ms else ""
             )

@@ -42,7 +42,7 @@ def run_app(config: Config, *, start_simulator: bool, open_camera: bool = False)
             qt_app = existing if isinstance(existing, QApplication) else QApplication(sys.argv[:1])
             qt_app.setApplicationName("Taprivo")
             qt_app.setQuitOnLastWindowClosed(True)
-            apply_theme(qt_app, config.hud.theme)
+            palette = apply_theme(qt_app, config.hud.theme)
 
             camera_window: CameraWindow | None = None
             signals = VisionSignals()
@@ -50,12 +50,14 @@ def run_app(config: Config, *, start_simulator: bool, open_camera: bool = False)
             def open_camera_window() -> None:
                 nonlocal camera_window
                 if camera_window is None:
-                    camera_window = CameraWindow(controller, config, signals)
+                    camera_window = CameraWindow(controller, config, signals, palette=palette)
                 camera_window.show()
                 camera_window.raise_()
                 camera_window.activateWindow()
 
-            window = HudWindow(engine, simulator, config, on_open_camera=open_camera_window)
+            window = HudWindow(
+                engine, simulator, config, on_open_camera=open_camera_window, palette=palette
+            )
             engine_signals = EngineSignals(parent=window)
             engine_signals.snapshot_changed.connect(
                 window.on_snapshot, Qt.ConnectionType.QueuedConnection

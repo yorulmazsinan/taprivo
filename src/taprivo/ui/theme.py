@@ -143,6 +143,11 @@ def stylesheet(palette: Palette) -> str:
         background-color: {palette.accent};
         border-radius: 4px;
     }}
+    QFrame#card {{
+        background-color: {palette.surface};
+        border: 1px solid {palette.border};
+        border-radius: 12px;
+    }}
     QMessageBox {{
         background-color: {palette.surface};
         color: {palette.text};
