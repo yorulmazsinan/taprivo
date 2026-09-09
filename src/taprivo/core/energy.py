@@ -20,7 +20,7 @@ from taprivo.core.combo import ComboTracker
 from taprivo.core.events import Hand, TapEvent, now_monotonic_ms
 from taprivo.core.rhythm import RhythmTracker
 from taprivo.core.session import Session
-from taprivo.core.state import AppSnapshot, McpStatus, Mode, TrackingStatus
+from taprivo.core.state import AgentStatus, AppSnapshot, McpStatus, Mode, TrackingStatus
 from taprivo.core.stats_sink import DailyRow, SessionRow, StatsSink
 
 log = logging.getLogger(__name__)
@@ -90,6 +90,8 @@ class EnergyEngine:
         self._last_tool_call_utc: datetime | None = None
         self._camera_fps = 0.0
         self._detection_ratio = 0.0
+        # Not session data: what the coding agent reports outlives a reset.
+        self._agent: AgentStatus | None = None
         self._start_session_locked()
         self._emit("started", self._session_row_locked())
 
@@ -295,6 +297,13 @@ class EnergyEngine:
             snapshot = self._snapshot_locked()
         self._notify(snapshot)
 
+    def set_agent_status(self, status: AgentStatus) -> None:
+        """Record what the coding agent last reported about itself."""
+        with self._lock:
+            self._agent = status
+            snapshot = self._snapshot_locked()
+        self._notify(snapshot)
+
     def set_camera_stats(self, fps: float, detection_ratio: float) -> None:
         with self._lock:
             self._camera_fps = round(fps, 1)
@@ -354,6 +363,7 @@ class EnergyEngine:
             session_duration_seconds=self._session.duration_seconds(now),
             camera_fps=self._camera_fps,
             detection_ratio=self._detection_ratio,
+            agent=self._agent,
         )
 
     def _notify(self, snapshot: AppSnapshot) -> None:
