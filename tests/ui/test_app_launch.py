@@ -82,3 +82,41 @@ def test_run_app_accepts_open_camera_flag_and_cli_forwards_it(
     with pytest.raises(typer.Exit):
         cli._launch(False, open_camera=True)
     assert seen == {"start_simulator": False, "open_camera": True}
+
+
+def _read_history(days: int = 5) -> list[object]:
+    from taprivo.core.stats_store import StatsStore
+
+    store = StatsStore(paths.stats_path())
+    try:
+        return list(store.history(days))
+    finally:
+        store.close()
+
+
+def test_a_session_row_is_written_and_ended_on_shutdown(
+    taprivo_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(app_module, "McpServerThread", lambda *a, **k: _FakeMcpServerThread())
+    monkeypatch.setattr(app_module, "HudWindow", _RaisingHudWindow)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        app_module.run_app(Config(), start_simulator=False)
+
+    assert paths.stats_path().exists()
+    history = _read_history()
+    assert len(history) == 1
+
+
+def test_no_statistics_file_when_stats_are_disabled(
+    taprivo_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from taprivo.config import StatsConfig
+
+    monkeypatch.setattr(app_module, "McpServerThread", lambda *a, **k: _FakeMcpServerThread())
+    monkeypatch.setattr(app_module, "HudWindow", _RaisingHudWindow)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        app_module.run_app(Config(stats=StatsConfig(enabled=False)), start_simulator=False)
+
+    assert not paths.stats_path().exists()

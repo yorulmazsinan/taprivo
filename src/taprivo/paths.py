@@ -35,6 +35,13 @@ def user_config_path() -> Path:
     return home() / "config.yaml"
 
 
+def stats_path(override: str | None = None) -> Path:
+    """Where session statistics live; `stats.path` in config.yaml wins."""
+    if override:
+        return Path(override).expanduser()
+    return home() / "stats.sqlite"
+
+
 def ensure_home() -> Path:
     path = home()
     path.mkdir(parents=True, exist_ok=True)

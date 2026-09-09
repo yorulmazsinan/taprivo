@@ -37,3 +37,6 @@ squeeze:
   max_cycle_ms: 2500
   cooldown_ms: 300
   frame_gap_reset_ms: 250
+stats:
+  enabled: true
+  path: null

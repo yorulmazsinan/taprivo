@@ -13,17 +13,20 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Literal
 
 from taprivo.config import Config
 from taprivo.core.combo import ComboTracker
-from taprivo.core.events import TapEvent, now_monotonic_ms
+from taprivo.core.events import Hand, TapEvent, now_monotonic_ms
 from taprivo.core.session import Session
 from taprivo.core.state import AppSnapshot, McpStatus, Mode, TrackingStatus
+from taprivo.core.stats_sink import DailyRow, SessionRow, StatsSink
 
 log = logging.getLogger(__name__)
 
 IDEMPOTENCY_LIMIT = 10_000
 Listener = Callable[[AppSnapshot], None]
+SinkEvent = Literal["started", "snapshot", "ended"]
 
 
 class SpendError(StrEnum):
@@ -71,10 +74,13 @@ class EnergyEngine:
         *,
         mode: Mode = "simulator",
         now_ms: Callable[[], int] = now_monotonic_ms,
+        sink: StatsSink | None = None,
     ) -> None:
         self._config = config
         self._mode: Mode = mode
         self._now_ms = now_ms
+        self._sink = sink
+        self._closed = False
         self._lock = threading.Lock()
         self._listeners: list[Listener] = []
         self._tracking: TrackingStatus = "inactive"
@@ -84,6 +90,7 @@ class EnergyEngine:
         self._camera_fps = 0.0
         self._detection_ratio = 0.0
         self._start_session_locked()
+        self._emit("started", self._session_row_locked())
 
     # -- session lifecycle -------------------------------------------------
 
@@ -119,7 +126,10 @@ class EnergyEngine:
             credited = min(per_tap, room)
             self._gross += per_tap
             self._overflow += per_tap - credited
-            self._session.record_tap(event.hand, event.finger, event.timestamp_monotonic_ms)
+            self._session.record_combo(self._combo.count)
+            self._session.record_tap(
+                event.hand, event.finger, event.timestamp_monotonic_ms, event.source
+            )
             snapshot = self._snapshot_locked()
         log.debug(
             "[TAP] %s:%s displacement=%.3f velocity=%.2f +%d",
@@ -186,11 +196,75 @@ class EnergyEngine:
 
     def reset_session(self) -> AppSnapshot:
         with self._lock:
+            ended = self._session_row_locked(closing=True)
             self._start_session_locked()
+            started = self._session_row_locked()
             snapshot = self._snapshot_locked()
         log.info("session reset")
+        self._emit("ended", ended)
+        self._emit("started", started)
         self._notify(snapshot)
         return snapshot
+
+    def heartbeat(self) -> None:
+        """Persist the current session row. The caller owns the timer."""
+        with self._lock:
+            row = self._session_row_locked()
+        self._emit("snapshot", row)
+
+    def close(self) -> None:
+        """End the current session for the statistics store. Idempotent."""
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            row = self._session_row_locked(closing=True)
+        self._emit("ended", row)
+
+    # -- statistics --------------------------------------------------------
+
+    def _session_row_locked(self, *, closing: bool = False) -> SessionRow:
+        now = self._now_ms()
+        return SessionRow(
+            session_id=self._session.session_id,
+            started_utc=self._session.started_at_utc.isoformat(),
+            ended_utc=datetime.now(UTC).isoformat() if closing else None,
+            duration_s=self._session.duration_seconds(now),
+            mode=self._mode,
+            taps_total=self._session.taps_total,
+            taps_left=self._session.taps_per_hand[Hand.LEFT],
+            taps_right=self._session.taps_per_hand[Hand.RIGHT],
+            squeezes=self._session.squeezes,
+            generated=self._gross,
+            spent=self._spent,
+            overflow=self._overflow,
+            max_combo=self._session.max_combo,
+        )
+
+    def _emit(self, event: SinkEvent, row: SessionRow) -> None:
+        """Hand a row to the sink outside the lock; a failing sink is not fatal."""
+        sink = self._sink
+        if sink is None:
+            return
+        try:
+            if event == "started":
+                sink.session_started(row)
+            elif event == "ended":
+                sink.session_ended(row)
+            else:
+                sink.session_snapshot(row)
+        except Exception:
+            log.exception("statistics sink failed on %s", event)
+
+    def today(self) -> DailyRow | None:
+        """Totals for the current UTC day, or None without a statistics store."""
+        if self._sink is None:
+            return None
+        try:
+            return self._sink.today(datetime.now(UTC).date().isoformat())
+        except Exception:
+            log.exception("statistics sink failed on today")
+            return None
 
     # -- status --------------------------------------------------------------
 
