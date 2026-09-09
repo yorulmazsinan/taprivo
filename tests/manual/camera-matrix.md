@@ -16,3 +16,4 @@ Run before every release that touches `vision/`. One row per environment.
 
 | Date | Mac / macOS | Camera | Light | fps | Calib cycles / levels | 20-squeeze run | Rest (3 min) | Typing (3 min) | Two hands (5×) | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|
+| 2026-09-09 | MacBook (Apple M3) / macOS 26 | FaceTime HD (built-in) | desk lamp, daytime | 29 | defaults 0.80 / 0.45 | 48 counted (R 28 / L 20, both hands, cadence ≈ 0.9 s) | pending | pending | pending | iPhone Continuity Camera takes index 0 with black frames; FaceTime is index 1 |

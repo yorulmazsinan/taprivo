@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 
@@ -117,3 +118,29 @@ def test_recorded_replay_is_deterministic_and_pinned() -> None:
     ]
     assert as_list == json.loads((FIXTURES / "spike-2026-09-08.events.json").read_text())
     assert len(as_list) % 5 == 0
+
+
+def test_field_recording_counts_both_hands() -> None:
+    path = FIXTURES / "squeeze-2026-09-09.csv"
+    first = replay_csv(path, SqueezeParams())
+    second = replay_csv(path, SqueezeParams())
+    as_list = [
+        {"ts_ms": e.timestamp_monotonic_ms, "hand": e.hand.value, "finger": e.finger.value}
+        for e in first
+    ]
+    assert as_list == [
+        {"ts_ms": e.timestamp_monotonic_ms, "hand": e.hand.value, "finger": e.finger.value}
+        for e in second
+    ]
+    assert as_list == json.loads((FIXTURES / "squeeze-2026-09-09.events.json").read_text())
+
+    right_cycles = [e for e in first if e.hand is Hand.RIGHT and e.finger is Finger.INDEX]
+    left_cycles = [e for e in first if e.hand is Hand.LEFT and e.finger is Finger.INDEX]
+    assert len(right_cycles) == 28
+    assert len(left_cycles) == 20
+    assert len(first) == 48 * 5
+
+    for cycles in (right_cycles, left_cycles):
+        timestamps = sorted(e.timestamp_monotonic_ms for e in cycles)
+        gaps = [b - a for a, b in itertools.pairwise(timestamps)]
+        assert all(gap >= 500 for gap in gaps)

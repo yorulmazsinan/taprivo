@@ -95,24 +95,25 @@ def run_squeeze(
 
 def replay_csv(path: Path, params: SqueezeParams) -> list[TapEvent]:
     detector = SqueezeDetector(params, lambda: "replay-session")
-    sequence: list[tuple[HandFrame, ...]] = []
+    frames_by_ts: dict[int, list[HandFrame]] = {}
     with path.open() as fh:
         for row in csv.DictReader(fh):
             pts = tuple(
                 (float(row[f"x{i}"]), float(row[f"y{i}"]), float(row[f"z{i}"])) for i in range(21)
             )
-            sequence.append(
-                (
-                    HandFrame(
-                        ts_ms=int(row["ts_ms"]),
-                        hand=Hand.RIGHT if row["hand"] == "Right" else Hand.LEFT,
-                        hand_id="spike",
-                        score=float(row["score"]),
-                        landmarks=pts,
-                        features=compute_features(pts),
-                    ),
+            hand = Hand.RIGHT if row["hand"] == "Right" else Hand.LEFT
+            ts_ms = int(row["ts_ms"])
+            frames_by_ts.setdefault(ts_ms, []).append(
+                HandFrame(
+                    ts_ms=ts_ms,
+                    hand=hand,
+                    hand_id=hand.value,
+                    score=float(row["score"]),
+                    landmarks=pts,
+                    features=compute_features(pts),
                 )
             )
+    sequence: list[tuple[HandFrame, ...]] = [tuple(hands) for hands in frames_by_ts.values()]
     return run_squeeze(detector, sequence)
 
 
