@@ -9,16 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Slot
-from PySide6.QtGui import (
-    QCloseEvent,
-    QColor,
-    QFont,
-    QPainter,
-    QPainterPath,
-    QPen,
-    QPixmap,
-    QShowEvent,
-)
+from PySide6.QtGui import QCloseEvent, QFont, QShowEvent
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -28,7 +19,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -36,41 +26,31 @@ from PySide6.QtWidgets import (
 
 from taprivo.config import Config
 from taprivo.core.events import Finger, Hand
+from taprivo.ui.preview import (
+    Badge,
+    HandGlyph,
+    HandOverlay,
+    PreviewView,
+    StepPips,
+    hand_color,
+)
 from taprivo.ui.theme import Palette, resolve
-from taprivo.ui.vision_bridge import PreviewPacket, VisionSignals, make_preview_callback
+from taprivo.ui.vision_bridge import (
+    PreviewPacket,
+    VisionSignals,
+    make_preview_callback,
+    make_taps_callback,
+)
 from taprivo.ui.widgets import Meter
 from taprivo.vision.calibration import CalibrationResult, CalibrationSession
 from taprivo.vision.camera import CameraDevice, default_device, list_devices
 from taprivo.vision.controller import VisionController
+from taprivo.vision.squeeze import HandState
 
 log = logging.getLogger(__name__)
 
 PREVIEW_W, PREVIEW_H = 480, 360
-PREVIEW_RADIUS = 12
 TICK_MS = 100
-CONNECTIONS = [
-    (0, 1),
-    (1, 2),
-    (2, 3),
-    (3, 4),
-    (0, 5),
-    (5, 6),
-    (6, 7),
-    (7, 8),
-    (5, 9),
-    (9, 10),
-    (10, 11),
-    (11, 12),
-    (9, 13),
-    (13, 14),
-    (14, 15),
-    (15, 16),
-    (13, 17),
-    (17, 18),
-    (18, 19),
-    (19, 20),
-    (0, 17),
-]
 STATUS_TEXT = {
     "inactive": "Off",
     "tracking": "Tracking",
@@ -83,6 +63,7 @@ PHASE_TEXT = {
     "open": "Open",
     "closed": "Closed",
 }
+NOT_SEEN = "Not seen"
 IDLE_HINT_TEXT = "Press Calibrate to tune the open/closed levels for your hand."
 # Built-in first, iPhone Continuity Cameras last: the list should lead with the
 # camera that is actually attached to this Mac.
@@ -116,6 +97,7 @@ class CameraWindow(QWidget):
         self.signals = signals
         self.signals.preview.connect(self.on_preview, Qt.ConnectionType.QueuedConnection)
         self.signals.devices.connect(self.on_devices, Qt.ConnectionType.QueuedConnection)
+        self.signals.squeeze.connect(self.on_squeeze, Qt.ConnectionType.QueuedConnection)
         self.setWindowTitle("Taprivo Camera")
 
         if palette is not None:
@@ -126,32 +108,24 @@ class CameraWindow(QWidget):
                 config.hud.theme, app if isinstance(app, QApplication) else None
             )
         palette = self._palette
-        self.setMinimumSize(760, 560)
+        # Tall enough for the fixed-size preview, the meters and the whole
+        # calibration card: a shorter minimum lets the buttons overlap the
+        # preview, because the preview cannot shrink.
+        self.setMinimumSize(760, 700)
 
         self.device_combo = QComboBox()
         self.refresh_button = QPushButton("Refresh")
         self.refresh_button.clicked.connect(self.refresh_devices)
-        self.preview_label = QLabel("Camera off")
+        self.preview_label = PreviewView(palette=palette, reduced_motion=config.hud.reduced_motion)
         self.preview_label.setFixedSize(PREVIEW_W, PREVIEW_H)
-        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_label.setStyleSheet(
-            f"background: {palette.surface_alt}; color: {palette.text_dim}; "
-            f"border-radius: {PREVIEW_RADIUS}px;"
-        )
-        self.fps_label = QLabel("")
-        self.fps_label.setStyleSheet(
-            f"background: rgba(0, 0, 0, 140); color: {palette.text}; "
-            "font-size: 11px; padding: 3px 8px; border-radius: 6px;"
-        )
-        self.fps_label.setParent(self.preview_label)
-        self.fps_label.move(8, PREVIEW_H - 26)
-        self.fps_label.hide()
+        self.preview_label.setText("Camera off")
 
         self.status_label = QLabel("")
         self.status_label.setStyleSheet(f"color: {palette.text_dim}; font-size: 12px;")
         self.levels_label = QLabel("")
         self.levels_label.setStyleSheet(f"color: {palette.text_dim}; font-size: 12px;")
         self.meters: dict[Hand, Meter] = {}
+        self.hand_glyphs: dict[Hand, HandGlyph] = {}
         self.state_labels: dict[Hand, QLabel] = {}
         meters = QGridLayout()
         meters.setHorizontalSpacing(8)
@@ -159,14 +133,15 @@ class CameraWindow(QWidget):
         for row, hand in enumerate(Hand):
             meter = Meter(palette=palette)
             meter.setAccessibleName(f"{hand.value} hand openness")
-            meter.setColor(palette.accent)
+            meter.setColor(hand_color(palette, hand))
             self.meters[hand] = meter
-            state_label = QLabel("Not seen")
-            state_label.setStyleSheet(f"color: {palette.text_dim};")
+            state_label = QLabel(NOT_SEEN)
+            state_label.setFixedWidth(64)
             self.state_labels[hand] = state_label
-            hand_label = QLabel(hand.value.title())
-            hand_label.setFixedWidth(40)
-            meters.addWidget(hand_label, row, 0)
+            self._paint_state(hand, NOT_SEEN)
+            glyph = HandGlyph(hand, palette=palette)
+            self.hand_glyphs[hand] = glyph
+            meters.addWidget(glyph, row, 0)
             meters.addWidget(meter, row, 1)
             meters.addWidget(state_label, row, 2)
 
@@ -191,13 +166,11 @@ class CameraWindow(QWidget):
         countdown_font.setWeight(QFont.Weight.Bold)
         self.countdown_label.setFont(countdown_font)
         self.countdown_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.calibration_progress = QProgressBar()
-        self.calibration_progress.setRange(0, 100)
-        self.calibration_progress.setTextVisible(False)
-        self.calibration_progress.setFixedHeight(6)
-        self.result_levels_label = QLabel("")
-        self.result_cycles_label = QLabel("")
-        self.result_status_label = QLabel("")
+        self.step_pips = StepPips(palette=palette)
+        self.step_pips.setFixedWidth(320)
+        self.result_levels_label = Badge(palette=palette)
+        self.result_cycles_label = Badge(palette=palette)
+        self.result_status_label = Badge(palette=palette)
         self.apply_button = QPushButton("Apply")
         self.apply_button.clicked.connect(self.apply_calibration)
         self.apply_button.setEnabled(False)
@@ -234,10 +207,17 @@ class CameraWindow(QWidget):
         right.addStretch(1)
         body.addLayout(right)
 
+        pips_row = QHBoxLayout()
+        pips_row.addStretch(1)
+        pips_row.addWidget(self.step_pips)
+        pips_row.addStretch(1)
+
         result_card = QHBoxLayout()
+        result_card.setSpacing(6)
         result_card.addWidget(self.result_levels_label)
         result_card.addWidget(self.result_cycles_label)
         result_card.addWidget(self.result_status_label)
+        result_card.addStretch(1)
 
         self.calibration_card = QFrame()
         self.calibration_card.setObjectName("card")
@@ -246,7 +226,7 @@ class CameraWindow(QWidget):
         card_layout.setSpacing(8)
         card_layout.addWidget(self.prompt_label)
         card_layout.addWidget(self.countdown_label)
-        card_layout.addWidget(self.calibration_progress)
+        card_layout.addLayout(pips_row)
         card_layout.addLayout(result_card)
         card_layout.addLayout(cal_buttons)
 
@@ -326,6 +306,14 @@ class CameraWindow(QWidget):
         data = self.device_combo.currentData()
         return int(data) if data is not None else None
 
+    def selected_device_name(self) -> str:
+        """The plain device name for the preview strip, without the resolution."""
+        index = self.selected_device_index()
+        device = next((d for d in self._devices if d.index == index), None)
+        if device is not None and device.name:
+            return device.name
+        return self.device_combo.currentText().split(" (")[0]
+
     # -- camera --------------------------------------------------------------
 
     @Slot()
@@ -337,7 +325,11 @@ class CameraWindow(QWidget):
             return
         self._last_error = ""
         try:
-            self._controller.start(index, preview=make_preview_callback(self.signals))
+            self._controller.start(
+                index,
+                preview=make_preview_callback(self.signals),
+                taps=make_taps_callback(self.signals),
+            )
         except Exception as exc:
             log.exception("failed to start camera")
             self._last_error = str(exc)
@@ -349,13 +341,12 @@ class CameraWindow(QWidget):
         self._controller.stop()
         self._was_running = False
         self._session = None
-        self.preview_label.setPixmap(QPixmap())
+        self.preview_label.set_frame(None)
         self.preview_label.setText("Camera off")
-        self.fps_label.hide()
+        self.preview_label.clear_chrome()
         for hand in Hand:
             self.meters[hand].setValue(0.0)
-            self.meters[hand].setState("Not seen")
-            self.state_labels[hand].setText("Not seen")
+            self._paint_state(hand, NOT_SEEN)
         self.export_button.setEnabled(False)
         self._render_status()
         self._show_idle_hint()
@@ -368,23 +359,28 @@ class CameraWindow(QWidget):
             return None
         self._session = self._controller.begin_calibration()
         self._result = None
-        self.result_levels_label.setText("")
-        self.result_cycles_label.setText("")
-        self.result_status_label.setText("")
+        self.result_levels_label.setBadge("")
+        self.result_cycles_label.setBadge("")
+        self.result_status_label.setBadge("")
+        self.step_pips.setFilled(0)
         self.apply_button.setEnabled(False)
         self.export_button.setEnabled(False)
         return self._session
 
     def show_result(self, result: CalibrationResult) -> None:
         self._result = result
-        self.result_levels_label.setText(
-            f"open {result.levels.open_level:.2f} · closed {result.levels.closed_level:.2f}"
+        self.result_levels_label.setBadge(
+            f"open {result.levels.open_level:.2f} · closed {result.levels.closed_level:.2f}",
+            self._palette.text,
         )
-        self.result_cycles_label.setText(f"cycles: {result.cycles}")
-        self.result_status_label.setText(result.status)
+        self.result_cycles_label.setBadge(f"cycles: {result.cycles}", self._palette.text)
+        self.result_status_label.setBadge(
+            result.status,
+            self._palette.ok if result.status == "ok" else self._palette.warn,
+        )
         self._set_prompt("Calibration complete")
         self.countdown_label.setText("")
-        self.calibration_progress.setValue(100)
+        self.step_pips.setStep("done")
         self.apply_button.setEnabled(True)
         self.export_button.setEnabled(True)
 
@@ -421,50 +417,53 @@ class CameraWindow(QWidget):
 
     # -- rendering -----------------------------------------------------------
 
+    @staticmethod
+    def _state_text(state: HandState | None) -> str:
+        if state is None or not state.seen:
+            return NOT_SEEN
+        return PHASE_TEXT.get(state.phase, state.phase)
+
+    def _state_color(self, text: str) -> str:
+        if text == PHASE_TEXT["open"]:
+            return self._palette.ok
+        if text == PHASE_TEXT["closed"]:
+            return self._palette.accent
+        return self._palette.text_dim
+
+    def _paint_state(self, hand: Hand, text: str) -> None:
+        """Colour carries the phase; the word is always spelled out beside it."""
+        label = self.state_labels[hand]
+        label.setStyleSheet(f"color: {self._state_color(text)}; font-size: 12px;")
+        label.setText(text)
+        label.setAccessibleName(f"{hand.value} hand {text}")
+
     @Slot(object)
     def on_preview(self, packet: object) -> None:
         if not isinstance(packet, PreviewPacket):
             return
-        raw = QPixmap.fromImage(packet.image).scaled(
-            PREVIEW_W, PREVIEW_H, Qt.AspectRatioMode.KeepAspectRatio
+        states = packet.state.hands
+        self.preview_label.set_frame(packet.image)
+        self.preview_label.set_hands(
+            HandOverlay(
+                frame.hand,
+                frame.landmarks,
+                frame.features.openness,
+                self._state_text(states.get(frame.hand)),
+            )
+            for frame in packet.hands
         )
-        pixmap = QPixmap(PREVIEW_W, PREVIEW_H)
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        clip = QPainterPath()
-        clip.addRoundedRect(0, 0, PREVIEW_W, PREVIEW_H, PREVIEW_RADIUS, PREVIEW_RADIUS)
-        painter.setClipPath(clip)
-        x = (PREVIEW_W - raw.width()) // 2
-        y = (PREVIEW_H - raw.height()) // 2
-        painter.drawPixmap(x, y, raw)
-        if packet.hands:
-            w, h = raw.width(), raw.height()
-            for hand_frame in packet.hands:
-                painter.setPen(QPen(QColor("#4fd1c5"), 2))
-                pts = [(x + px * w, y + py * h) for px, py, _ in hand_frame.landmarks]
-                for a, b in CONNECTIONS:
-                    painter.drawLine(int(pts[a][0]), int(pts[a][1]), int(pts[b][0]), int(pts[b][1]))
-                painter.setPen(QPen(QColor("#f6e05e"), 5))
-                for px, py in pts:
-                    painter.drawPoint(int(px), int(py))
-        painter.end()
-        self.preview_label.setPixmap(pixmap)
         stats = self._controller.stats()
-        self.fps_label.setText(
-            f"{stats.processed_fps:.0f} fps · hand {stats.detection_ratio * 100:.0f}%"
+        self.preview_label.set_chrome(
+            stats.processed_fps, stats.detection_ratio, self.selected_device_name()
         )
-        self.fps_label.adjustSize()
-        self.fps_label.move(8, PREVIEW_H - self.fps_label.height() - 8)
-        self.fps_label.show()
-        for hand, hand_state in packet.state.hands.items():
+        for hand, hand_state in states.items():
             self.meters[hand].setValue(max(0.0, min(1.0, hand_state.ema)))
-            if not hand_state.seen:
-                text = "Not seen"
-            else:
-                text = PHASE_TEXT.get(hand_state.phase, hand_state.phase)
-            self.meters[hand].setState(text)
-            self.state_labels[hand].setText(text)
+            self._paint_state(hand, self._state_text(hand_state))
+
+    @Slot(object)
+    def on_squeeze(self, hand: object) -> None:
+        if isinstance(hand, Hand):
+            self.preview_label.pulse(hand)
 
     def status_text(self) -> str:
         stats = self._controller.stats()
@@ -482,6 +481,7 @@ class CameraWindow(QWidget):
         self.start_button.setEnabled(bool(self._devices) and not running and not self._refreshing)
         self.stop_button.setEnabled(running)
         self.calibrate_button.setEnabled(running)
+        self.preview_label.set_live(running)
         self.status_label.setText(self.status_text())
 
     def _render_levels(self) -> None:
@@ -514,7 +514,7 @@ class CameraWindow(QWidget):
             self.countdown_label.setText(
                 f"{prompt.remaining_ms / 1000:.1f} s" if prompt.remaining_ms else ""
             )
-            self.calibration_progress.setValue(int(max(0.0, min(1.0, prompt.progress)) * 100))
+            self.step_pips.setStep(prompt.step)
             if session.finished and self._result is None:
                 result = session.result()
                 if result is not None:
