@@ -141,7 +141,7 @@ cmd_notarize() {
             "TAPRIVO_NOTARY_KEY needs TAPRIVO_NOTARY_KEY_ID and TAPRIVO_NOTARY_ISSUER as well"
         NOTARY_AUTH=(--key "$TAPRIVO_NOTARY_KEY" --key-id "$TAPRIVO_NOTARY_KEY_ID" --issuer "$TAPRIVO_NOTARY_ISSUER")
     elif [ -n "${TAPRIVO_NOTARY_PROFILE:-}" ]; then
-        NOTARY_AUTH=("${NOTARY_AUTH[@]}")
+        NOTARY_AUTH=(--keychain-profile "$TAPRIVO_NOTARY_PROFILE")
     else
         die "Set TAPRIVO_NOTARY_PROFILE (a keychain profile from 'xcrun notarytool store-credentials')
 or TAPRIVO_NOTARY_KEY, TAPRIVO_NOTARY_KEY_ID and TAPRIVO_NOTARY_ISSUER (an App Store Connect API key file).
