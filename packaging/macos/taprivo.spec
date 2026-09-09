@@ -18,7 +18,7 @@ from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_sub
 
 from taprivo import __version__
 
-# CFBundleVersion carries the full version (0.1.0b3); CFBundleShortVersionString
+# CFBundleVersion carries the full version (for example 0.1.0b4); CFBundleShortVersionString
 # has to be a plain dotted number, so the pre-release suffix is stripped.
 BUNDLE_VERSION = __version__
 _release_match = re.match(r"\d+(?:\.\d+)*", __version__)

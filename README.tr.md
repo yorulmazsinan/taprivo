@@ -64,8 +64,10 @@ pipx de aynı şekilde çalışır: `pipx install taprivo`.
 Kurulum mediapipe, OpenCV ve Qt nedeniyle yaklaşık 1,5 GB yer kaplar. Güncellemek için
 `uv tool upgrade taprivo`, kaldırmak için `uv tool uninstall taprivo`.
 
-İmzalı bir macOS uygulaması (DMG) yakın bir beta sürümünde planlanıyor; katkıcılar
-`packaging/macos/build.sh build` ile imzasız bir paket üretebilir.
+Uygulama olarak mı istersiniz? [Son sürümden](https://github.com/yorulmazsinan/taprivo/releases/latest)
+imzalı ve notarize edilmiş `Taprivo-<sürüm>.dmg` dosyasını indirip (Apple Silicon)
+Taprivo'yu Applications klasörüne sürükleyin. Katkıcılar `packaging/macos/build.sh build`
+ile paketi üretebilir.
 
 Katkı verenler aşağıdaki klon ve `uv sync` yolunu kullanmayı sürdürür.
 

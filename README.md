@@ -65,8 +65,10 @@ pipx works the same way: `pipx install taprivo`.
 The install takes about 1.5 GB because of mediapipe, OpenCV and Qt. Upgrade with
 `uv tool upgrade taprivo`, remove with `uv tool uninstall taprivo`.
 
-A signed macOS app (DMG) is planned for a coming beta; contributors can build an
-unsigned bundle with `packaging/macos/build.sh build`.
+Prefer an app? Download the signed and notarized `Taprivo-<version>.dmg` from the
+[latest release](https://github.com/yorulmazsinan/taprivo/releases/latest) (Apple
+Silicon) and drag Taprivo to Applications. Contributors can build it with
+`packaging/macos/build.sh build`.
 
 Contributors keep the clone and `uv sync` path below.
 
