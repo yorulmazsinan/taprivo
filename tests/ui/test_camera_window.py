@@ -91,6 +91,8 @@ class FakeController:
     def stop(self) -> None:
         self.stop_calls += 1
         self.running = False
+        # The real controller discards its worker (and the worker's error) on stop.
+        self.error = None
 
 
 @pytest.fixture

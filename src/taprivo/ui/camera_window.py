@@ -490,7 +490,9 @@ class CameraWindow(QWidget):
                 # The worker died on its own (an uncaught exception in the
                 # capture loop) rather than via an explicit Stop click: run
                 # the same cleanup stop_camera() does, once, so the preview
-                # and meters do not freeze on stale state.
+                # and meters do not freeze on stale state. Capture the reason
+                # first: stopping the controller discards its worker and error.
+                self._last_error = self._controller.error or self._last_error
                 self.stop_camera()
                 return
             self._was_running = running
