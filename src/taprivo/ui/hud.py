@@ -51,6 +51,15 @@ def _toggle_text(running: bool) -> str:
     return "Stop Keyboard" if running else "Start Keyboard"
 
 
+def _rate_text(snapshot: AppSnapshot) -> str:
+    text = f"{snapshot.taps_per_minute} taps/min"
+    if snapshot.bpm > 0:
+        text += f" · {round(snapshot.bpm)} BPM"
+        if snapshot.rhythm_steady:
+            text += " steady"
+    return text
+
+
 def _combo_text(snapshot: AppSnapshot) -> str:
     text = f"COMBO x{snapshot.combo}"
     if snapshot.combo_multiplier > 1.0:
@@ -74,6 +83,7 @@ class HudWindow(QWidget):
         self._config = config
         self._pending: AppSnapshot | None = None
         self._latest: AppSnapshot | None = None
+        self._rate_steady: bool | None = None
         if palette is not None:
             self._palette: Palette = palette
         else:
@@ -142,7 +152,7 @@ class HudWindow(QWidget):
         rate_font = QFont()
         rate_font.setStyleHint(QFont.StyleHint.Monospace)
         self.rate_label.setFont(rate_font)
-        self.rate_label.setStyleSheet(f"color: {palette.text_dim}; font-size: 12px;")
+        self._set_rate_steady(False)
         self.combo_label.setStyleSheet("font-size: 12px;")
         self.rate_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         rhythm = QHBoxLayout()
@@ -247,12 +257,21 @@ class HudWindow(QWidget):
             count = snapshot.taps_per_hand_finger.get((hand, finger), 0)
             chip.setChip(self._palette.finger[finger], self._chip_labels[(hand, finger)], count)
         self.combo_label.setText(_combo_text(snapshot))
-        self.rate_label.setText(f"{snapshot.taps_per_minute} taps/min")
+        self.rate_label.setText(_rate_text(snapshot))
+        self._set_rate_steady(snapshot.rhythm_steady)
         self.tracking_label.setStatus(
             TRACKING_KIND[snapshot.tracking], f"Tracking: {TRACKING_TEXT[snapshot.tracking]}"
         )
         self.mcp_label.setStatus(MCP_KIND[snapshot.mcp], f"MCP: {MCP_TEXT[snapshot.mcp]}")
         self.toggle_button.setText(_toggle_text(self._simulator.running))
+
+    def _set_rate_steady(self, steady: bool) -> None:
+        """Highlight the rate line while the beat is steady; restyle only on change."""
+        if steady == self._rate_steady:
+            return
+        self._rate_steady = steady
+        color = self._palette.accent if steady else self._palette.text_dim
+        self.rate_label.setStyleSheet(f"color: {color}; font-size: 12px;")
 
     # -- actions -------------------------------------------------------------
 

@@ -39,6 +39,8 @@ app = typer.Typer(
 )
 
 JSON_OPTION = typer.Option(False, "--json", help="Machine-readable JSON output.")
+# En dash: "nothing measured yet", as opposed to a measured zero.
+NO_VALUE = "–"  # noqa: RUF001
 NOT_RUNNING_HINT = "Taprivo is not running. Start it with 'taprivo' or 'taprivo simulate'."
 NO_STATS_HINT = "No statistics file yet. Run Taprivo once with stats.enabled: true to create it."
 HISTORY_HEADER = "Day         Sessions  Taps  Generated  Spent  Active"
@@ -317,6 +319,16 @@ def _stats_history(config: Config, json_output: bool, days: int) -> None:
         )
 
 
+def _rhythm_text(data: dict[str, Any]) -> str:
+    bpm = float(data.get("bpm", 0.0))
+    if bpm <= 0:
+        return NO_VALUE
+    if data.get("rhythm_steady"):
+        steady_multiplier = float(data.get("rhythm_multiplier", 1.0))
+        return f"{round(bpm)} BPM (steady, {steady_multiplier:g}×)"
+    return f"{round(bpm)} BPM"
+
+
 @app.command()
 def stats(
     json_output: bool = JSON_OPTION,
@@ -352,6 +364,7 @@ def stats(
     typer.echo(f"Rate:      {data['taps_per_minute']} taps/min")
     multiplier = float(data.get("combo_multiplier", 1.0))
     typer.echo(f"Combo:     x{data['combo']} ({multiplier:.1f}×)")
+    typer.echo(f"Rhythm:    {_rhythm_text(data)}")
     last = data["last_spend"]
     last_text = f"{last['amount']} for '{last['reason']}' at {last['at_utc']}" if last else "none"
     typer.echo(f"Spends:    {data['spend_count']} (last: {last_text})")

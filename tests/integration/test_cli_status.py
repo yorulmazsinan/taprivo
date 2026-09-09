@@ -56,6 +56,9 @@ def test_stats_json(running_server: RunningServer) -> None:
     assert payload["taps_per_finger"]["pinky"] == 1
     assert payload["taps_per_hand"] == {"left": 0, "right": 1}
     assert payload["combo_multiplier"] == 1.0
+    assert payload["rhythm_multiplier"] == 1.0
+    assert payload["rhythm_steady"] is False
+    assert payload["bpm"] == 0.0
 
 
 def test_stats_human_output_lists_hands_and_combo(running_server: RunningServer) -> None:
@@ -67,6 +70,7 @@ def test_stats_human_output_lists_hands_and_combo(running_server: RunningServer)
     assert "Hands:     left 1, right 1" in result.output
     assert "taps/min" in result.output
     assert "Combo:     x" in result.output and "×)" in result.output
+    assert "Rhythm:    " in result.output
 
 
 def test_stats_appends_todays_totals_when_the_store_has_a_row(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
@@ -7,7 +9,9 @@ from pytestqt.qtbot import QtBot
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
 from taprivo.core.events import Finger, Hand
-from taprivo.simulator import KEY_MAP
+from taprivo.simulator import KEY_MAP, Simulator
+from taprivo.ui.hud import HudWindow
+from taprivo.ui.theme import DARK
 from tests.ui.conftest import HudBundle
 
 
@@ -114,9 +118,6 @@ def test_auto_repeat_is_ignored(hud: HudBundle) -> None:
 
 
 def test_open_camera_button_calls_back(qtbot: QtBot) -> None:
-    from taprivo.simulator import Simulator
-    from taprivo.ui.hud import HudWindow
-
     calls: list[int] = []
     engine = EnergyEngine(Config())
     window = HudWindow(
@@ -149,3 +150,50 @@ def test_snapshot_renders_expected_size_and_colors(hud: HudBundle) -> None:
         if len(colors) > 2:
             break
     assert len(colors) > 2
+
+
+def _themed_hud(qtbot: QtBot) -> tuple[HudWindow, EnergyEngine]:
+    """A HUD pinned to the dark palette, so the accent colour is known here."""
+    cfg = Config()
+    engine = EnergyEngine(cfg)
+    window = HudWindow(engine, Simulator(engine, cfg), cfg, palette=DARK)
+    qtbot.addWidget(window)
+    return window, engine
+
+
+def _render(window: HudWindow, engine: EnergyEngine, qtbot: QtBot, **fields: object) -> None:
+    window.on_snapshot(replace(engine.snapshot(), **fields))
+    qtbot.waitUntil(lambda: window.rate_label.text() != "", timeout=2000)
+
+
+def test_rate_line_without_a_beat_shows_taps_only(qtbot: QtBot) -> None:
+    window, engine = _themed_hud(qtbot)
+    _render(window, engine, qtbot, taps_per_minute=132, bpm=0.0, rhythm_steady=False)
+    qtbot.waitUntil(lambda: window.rate_label.text() == "132 taps/min", timeout=2000)
+    assert DARK.text_dim in window.rate_label.styleSheet()
+
+
+def test_rate_line_shows_an_unsteady_bpm_dimmed(qtbot: QtBot) -> None:
+    window, engine = _themed_hud(qtbot)
+    _render(window, engine, qtbot, taps_per_minute=132, bpm=96.0, rhythm_steady=False)
+    qtbot.waitUntil(lambda: window.rate_label.text() == "132 taps/min · 96 BPM", timeout=2000)
+    assert DARK.text_dim in window.rate_label.styleSheet()
+    assert DARK.accent not in window.rate_label.styleSheet()
+
+
+def test_rate_line_accents_a_steady_bpm(qtbot: QtBot) -> None:
+    window, engine = _themed_hud(qtbot)
+    _render(window, engine, qtbot, taps_per_minute=132, bpm=96.0, rhythm_steady=True)
+    qtbot.waitUntil(
+        lambda: window.rate_label.text() == "132 taps/min · 96 BPM steady", timeout=2000
+    )
+    assert DARK.accent in window.rate_label.styleSheet()
+
+
+def test_rate_line_drops_the_accent_when_the_beat_breaks(qtbot: QtBot) -> None:
+    window, engine = _themed_hud(qtbot)
+    _render(window, engine, qtbot, taps_per_minute=132, bpm=96.0, rhythm_steady=True)
+    qtbot.waitUntil(lambda: DARK.accent in window.rate_label.styleSheet(), timeout=2000)
+    _render(window, engine, qtbot, taps_per_minute=40, bpm=0.0, rhythm_steady=False)
+    qtbot.waitUntil(lambda: window.rate_label.text() == "40 taps/min", timeout=2000)
+    assert DARK.text_dim in window.rate_label.styleSheet()

@@ -61,6 +61,15 @@ class StatsOut(BaseModel):
     taps_per_hand: dict[str, int] = Field(
         default_factory=dict, description="Taps counted per hand, e.g. {'left': 12, 'right': 9}."
     )
+    bpm: float = Field(
+        default=0.0, description="Tempo of the recent taps in beats per minute, 0.0 when unknown."
+    )
+    rhythm_steady: bool = Field(
+        default=False, description="True while the taps hold an even beat in the configured range."
+    )
+    rhythm_multiplier: float = Field(
+        default=1.0, description="Energy multiplier the steady beat earns, stacked on the combo."
+    )
     spend_count: int
     last_spend: LastSpendOut | None
     session_duration_seconds: int
