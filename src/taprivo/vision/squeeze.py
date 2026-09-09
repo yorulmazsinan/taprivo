@@ -107,7 +107,17 @@ class SqueezeDetector:
         )
 
     def process(self, hands: tuple[HandFrame, ...], ts_ms: int) -> list[TapEvent]:
-        present = {frame.hand: frame for frame in hands if hand_in_frame(frame)}
+        # Two detections can share the same handedness in one frame (MediaPipe
+        # can label both hands "Right" when mirrored or partly turned); resolve
+        # the collision deterministically by keeping the higher-score frame
+        # instead of letting dict-overwrite order decide.
+        present: dict[Hand, HandFrame] = {}
+        for candidate in hands:
+            if not hand_in_frame(candidate):
+                continue
+            best = present.get(candidate.hand)
+            if best is None or candidate.score > best.score:
+                present[candidate.hand] = candidate
         events: list[TapEvent] = []
         for hand, track in self._tracks.items():
             frame = present.get(hand)

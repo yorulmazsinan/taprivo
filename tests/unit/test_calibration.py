@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Sequence
 
+from taprivo.core.events import Hand
 from taprivo.vision.calibration import (
     FIST_MS,
     OPEN_MS,
@@ -93,6 +94,25 @@ def test_five_cycles_yield_ok_status_and_calibrated_levels() -> None:
     assert result.cycles == 5
     assert abs(result.levels.open_level - 0.9) < 1e-9
     assert abs(result.levels.closed_level - 0.3) < 1e-9
+
+
+def test_two_hands_five_cycles_each_still_yields_ok() -> None:
+    # A user following "Squeeze your hand 5 times" with both hands should not
+    # be penalised for the sum (10) exceeding MAX_CYCLES (7); the decision
+    # looks at the most active hand (5), which is in range.
+    s = session()
+    ts = drive_to_squeeze(s, open_value=0.9, closed_value=0.3)
+    frames: list[tuple[HandFrame, ...]] = []
+    for i in range(5):
+        right = squeeze_cycle(ts + i * 1200, hand=Hand.RIGHT, open_value=0.9, closed_value=0.3)
+        left = squeeze_cycle(ts + i * 1200, hand=Hand.LEFT, open_value=0.9, closed_value=0.3)
+        frames += [r + h for r, h in zip(right, left, strict=True)]
+    feed(s, frames, ts + SQUEEZE_MS)
+    assert s.finished
+    result = s.result()
+    assert result is not None
+    assert result.status == "ok"
+    assert result.cycles == 5
 
 
 def test_too_few_cycles_marks_uncalibrated_with_default_levels() -> None:

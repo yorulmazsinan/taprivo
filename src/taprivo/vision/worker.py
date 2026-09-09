@@ -164,6 +164,11 @@ class VisionWorker(threading.Thread):
             if frame is None:
                 if last_frame_ts is not None and now - last_frame_ts > STALE_MS:
                     self._set_status("stale")
+                # No new frame.ts_ms to advance the StatsWindow's own clock
+                # domain with, so fall back to the worker's clock here so the
+                # window keeps draining and fps decays toward 0 instead of
+                # freezing at its last value while frames have stopped.
+                self._last_frame_ts = now
                 with self._lock:
                     self._tick_calibration_locked((), now)
                     events = self._detector.process((), now)

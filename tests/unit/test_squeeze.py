@@ -76,6 +76,23 @@ def test_two_hands_count_independently() -> None:
     assert {e.hand for e in events} == {Hand.LEFT, Hand.RIGHT}
 
 
+def test_duplicate_handedness_in_one_frame_keeps_higher_score() -> None:
+    # MediaPipe can label two detections "Right" in the same frame (mirrored
+    # or partly-turned hands); the collision must resolve deterministically to
+    # the higher-score detection, not to whichever happens to come last.
+    detector = make()
+    low = hand_frame(0, {f: 0.3 for f in Finger}, hand_id="low", score=0.4, hand=Hand.RIGHT)
+    high = hand_frame(0, {f: 0.9 for f in Finger}, hand_id="high", score=0.95, hand=Hand.RIGHT)
+    detector.process((high, low), 0)  # higher-score frame listed first
+    state = detector.state().hands[Hand.RIGHT]
+    assert abs(state.ema - 0.9) < 1e-9
+
+    detector2 = make()
+    detector2.process((low, high), 0)  # higher-score frame listed last
+    state2 = detector2.state().hands[Hand.RIGHT]
+    assert abs(state2.ema - 0.9) < 1e-9
+
+
 def test_hand_loss_mid_cycle_and_reacquisition_emit_nothing() -> None:
     detector = make()
     events = run_squeeze(detector, steady(0, 600), tail_ms=0)
