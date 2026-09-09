@@ -5,6 +5,9 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- macOS packaging script: `packaging/macos/build.sh` builds a standalone `Taprivo.app` with PyInstaller and can sign it with a Developer ID, notarize it and wrap it in a DMG (`build`, `sign`, `notarize`, `dmg`, `all`). Apple Silicon only; see `packaging/macos/README.md`.
+
 ## [0.1.0b3] - 2026-09-09
 
 Beta preview with a Cursor adapter, persistent statistics and a rhythm bonus.

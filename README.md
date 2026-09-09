@@ -65,6 +65,9 @@ pipx works the same way: `pipx install "git+https://github.com/yorulmazsinan/tap
 The install takes about 1.5 GB because of mediapipe, OpenCV and Qt. Upgrade with
 `uv tool upgrade taprivo`, remove with `uv tool uninstall taprivo`.
 
+A signed macOS app (DMG) is planned for a coming beta; contributors can build an
+unsigned bundle with `packaging/macos/build.sh build`.
+
 Contributors keep the clone and `uv sync` path below.
 
 ## Quickstart (from a clone)

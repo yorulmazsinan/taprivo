@@ -64,6 +64,9 @@ pipx de aynı şekilde çalışır: `pipx install "git+https://github.com/yorulm
 Kurulum mediapipe, OpenCV ve Qt nedeniyle yaklaşık 1,5 GB yer kaplar. Güncellemek için
 `uv tool upgrade taprivo`, kaldırmak için `uv tool uninstall taprivo`.
 
+İmzalı bir macOS uygulaması (DMG) yakın bir beta sürümünde planlanıyor; katkıcılar
+`packaging/macos/build.sh build` ile imzasız bir paket üretebilir.
+
 Katkı verenler aşağıdaki klon ve `uv sync` yolunu kullanmayı sürdürür.
 
 ## Hızlı başlangıç (klonla)
