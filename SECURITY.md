@@ -24,3 +24,8 @@ During `taprivo setup claude`, the bearer token is passed to the `claude` CLI
 as a command-line argument so it can be stored in Claude Code's user-private
 configuration; on macOS, process arguments are visible to other processes
 running as the same user.
+
+Camera frames are processed in memory by the vision worker and rendered only
+in the Camera window; they are never written to disk, included in logs, or
+exposed over MCP. The hand-tracking dependency is pinned to a release without
+usage logging, and a test scans the installed wheel for logging endpoints.

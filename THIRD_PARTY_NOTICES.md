@@ -6,7 +6,13 @@ each under its own license. Distributions of Taprivo must keep these notices.
 | Project | License | Notes |
 |---|---|---|
 | PySide6 / Qt for Python | LGPL-3.0 (also commercial) | Dynamically linked; users may replace the Qt libraries. Packaged builds must ship the LGPL text and relinking instructions. |
-| MediaPipe | Apache-2.0 | Pinned to 0.10.33; later wheels ship a usage-logging client that the test suite rejects. |
+| MediaPipe | Apache-2.0 | Pinned to 0.10.33; later wheels ship a usage-logging client that the test suite rejects. Bundles the Hand Landmarker model `hand_landmarker.task` (Apache-2.0, Google), verified by SHA-256 at startup. |
+| absl-py | Apache-2.0 | via mediapipe |
+| flatbuffers | Apache-2.0 | via mediapipe |
+| matplotlib | Matplotlib license (PSF-based) | via mediapipe; unused by Taprivo |
+| numpy | BSD-3-Clause | via mediapipe |
+| opencv-contrib-python | Apache-2.0 | via mediapipe |
+| sounddevice | MIT | via mediapipe; unused by Taprivo |
 | MCP Python SDK (`mcp`) | MIT | |
 | Pydantic | MIT | |
 | Typer, Click | MIT, BSD-3-Clause | |
