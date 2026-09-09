@@ -1,0 +1,1202 @@
+[
+ {
+  "ts_ms": 139225285,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139225285,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139225285,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139225285,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139225285,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139226252,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139226252,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139226252,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139226252,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139226252,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139227123,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139227123,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139227123,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139227123,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139227123,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139227920,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139227920,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139227920,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139227920,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139227920,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139228787,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139228787,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139228787,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139228787,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139228787,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139229621,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139229621,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139229621,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139229621,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139229621,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139230158,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139230158,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139230158,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139230158,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139230158,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139231689,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139231689,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139231689,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139231689,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139231689,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139231726,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139231726,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139231726,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139231726,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139231726,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139232624,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139232624,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139232624,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139232624,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139232624,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139232624,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139232624,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139232624,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139232624,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139232624,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139233492,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139233492,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139233492,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139233492,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139233492,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139233524,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139233524,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139233524,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139233524,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139233524,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139234363,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139234363,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139234363,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139234363,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139234363,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139234363,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139234363,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139234363,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139234363,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139234363,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139235225,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139235225,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139235225,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139235225,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139235225,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139235225,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139235225,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139235225,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139235225,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139235225,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139236032,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139236032,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139236032,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139236032,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139236032,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139236032,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139236032,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139236032,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139236032,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139236032,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139236892,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139236892,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139236892,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139236892,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139236892,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139236892,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139236892,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139236892,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139236892,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139236892,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139237727,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139237727,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139237727,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139237727,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139237727,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139237760,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139237760,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139237760,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139237760,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139237760,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139238594,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139238594,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139238594,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139238594,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139238594,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139238594,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139238594,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139238594,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139238594,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139238594,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139239461,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139239461,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139239461,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139239461,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139239461,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139239461,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139239461,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139239461,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139239461,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139239461,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139240395,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139240395,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139240395,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139240395,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139240395,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139240395,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139240395,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139240395,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139240395,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139240395,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139241162,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139241162,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139241162,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139241162,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139241162,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139241196,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139241196,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139241196,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139241196,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139241196,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139242068,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139242068,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139242068,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139242068,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139242068,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139242095,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139242095,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139242095,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139242095,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139242095,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139242930,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139242930,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139242930,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139242930,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139242930,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139242963,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139242963,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139242963,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139242963,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139242963,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139243931,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139243931,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139243931,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139243931,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139243931,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139243997,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139243997,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139243997,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139243997,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139243997,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139244666,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139244666,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139244666,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139244666,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139244666,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139244834,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139244834,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139244834,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139244834,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139244834,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139245498,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139245498,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139245498,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139245498,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139245498,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139245703,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139245703,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139245703,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139245703,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139245703,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139246367,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139246367,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139246367,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139246367,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139246367,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139246566,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139246566,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139246566,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139246566,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139246566,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139247236,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139247236,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139247236,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139247236,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139247236,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139247236,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139247236,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139247236,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139247236,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139247236,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139248104,
+  "hand": "left",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139248104,
+  "hand": "left",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139248104,
+  "hand": "left",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139248104,
+  "hand": "left",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139248104,
+  "hand": "left",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139248133,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139248133,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139248133,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139248133,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139248133,
+  "hand": "right",
+  "finger": "pinky"
+ },
+ {
+  "ts_ms": 139248800,
+  "hand": "right",
+  "finger": "thumb"
+ },
+ {
+  "ts_ms": 139248800,
+  "hand": "right",
+  "finger": "index"
+ },
+ {
+  "ts_ms": 139248800,
+  "hand": "right",
+  "finger": "middle"
+ },
+ {
+  "ts_ms": 139248800,
+  "hand": "right",
+  "finger": "ring"
+ },
+ {
+  "ts_ms": 139248800,
+  "hand": "right",
+  "finger": "pinky"
+ }
+]
