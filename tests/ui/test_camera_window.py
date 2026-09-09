@@ -11,10 +11,10 @@ from taprivo.core.energy import EnergyEngine
 from taprivo.core.events import Hand
 from taprivo.ui.camera_window import CameraWindow
 from taprivo.ui.vision_bridge import VisionSignals, make_preview_callback
-from taprivo.vision.calibration import CalibrationResult
+from taprivo.vision.calibration import CalibrationPrompt, CalibrationResult
 from taprivo.vision.camera import CameraDevice
 from taprivo.vision.controller import VisionController
-from taprivo.vision.frames import Frame
+from taprivo.vision.frames import Frame, FrameStats
 from taprivo.vision.squeeze import Levels, SqueezeDetector, SqueezeParams
 from tests.vision_helpers import IdleSource, NoHandTracker, hands_frame
 
@@ -22,6 +22,75 @@ DEVICES = [
     CameraDevice(0, "Camera 0 (1920x1080) — no signal", 1920, 1080, False),
     CameraDevice(1, "Camera 1 (640x480)", 640, 480, True),
 ]
+
+
+class FakeCalibrationSession:
+    """A deterministic stand-in for CalibrationSession: each prompt() call
+    advances one "tick" of progress, finishing (with a result) on the third."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def prompt(self, ts_ms: int | None = None) -> CalibrationPrompt:
+        self.calls += 1
+        if self.calls < 3:
+            return CalibrationPrompt(
+                step="squeeze",
+                text=f"Squeeze your hand ({self.calls})",
+                remaining_ms=(3 - self.calls) * 1000,
+                progress=self.calls / 3,
+            )
+        return CalibrationPrompt(
+            step="done", text="Calibration complete", remaining_ms=0, progress=1.0
+        )
+
+    @property
+    def finished(self) -> bool:
+        return self.calls >= 3
+
+    def result(self) -> CalibrationResult | None:
+        if not self.finished:
+            return None
+        return CalibrationResult(levels=Levels(0.9, 0.3), cycles=5, status="ok")
+
+    def export_rows(self) -> list[dict[str, float | int | str]]:
+        return []
+
+
+class FakeController:
+    """Minimal stand-in for VisionController's public surface, for tests that
+    need deterministic control over `running`/`error` that a real worker
+    thread cannot give without flakiness."""
+
+    def __init__(self) -> None:
+        self.running = False
+        self.error: str | None = None
+        self.stop_calls = 0
+
+    def stats(self) -> FrameStats:
+        return FrameStats(0.0, 0.0, 0.0, 0)
+
+    def tracking_status(self) -> str:
+        return "tracking" if self.running else "inactive"
+
+    def now_ms(self) -> int:
+        return 0
+
+    def levels(self) -> Levels:
+        return Levels(0.80, 0.45)
+
+    def begin_calibration(self) -> FakeCalibrationSession:
+        return FakeCalibrationSession()
+
+    def apply_calibration(self, result: CalibrationResult) -> None:
+        pass
+
+    def reset_levels(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        self.stop_calls += 1
+        self.running = False
 
 
 @pytest.fixture
@@ -196,3 +265,97 @@ def test_snapshot_renders_minimum_size_and_colors(window: tuple) -> None:
         if len(colors) > 2:
             break
     assert len(colors) > 2
+
+
+def test_reopen_restarts_the_tick_timer_and_calibration_still_works(qtbot: QtBot) -> None:
+    # app.py builds one CameraWindow and reuses it for every "Open Camera"
+    # click; closeEvent stops the tick timer, so unless showEvent restarts
+    # it, the calibration UI is dead after a single close -> reopen.
+    controller = FakeController()
+    w = CameraWindow(controller, Config(), VisionSignals(), devices_fn=lambda: DEVICES)
+    qtbot.addWidget(w)
+    w.show()
+    assert w._timer.isActive()
+
+    w.close()
+    assert not w._timer.isActive()
+
+    w.show()
+    qtbot.waitUntil(lambda: w._timer.isActive(), timeout=1000)
+
+    controller.running = True
+    session = w.begin_calibration()
+    assert session is not None
+    assert not w.apply_button.isEnabled()
+
+    # Driven entirely by the restarted timer's _tick -> session.prompt(); the
+    # test never calls show_result() itself.
+    qtbot.waitUntil(lambda: w.apply_button.isEnabled(), timeout=3000)
+    assert "Squeeze" in w.prompt_label.text() or "complete" in w.prompt_label.text().lower()
+    assert w.countdown_label.text() != "" or w.calibration_progress.value() > 0
+
+
+def test_worker_death_surfaces_error_and_resets_the_ui(qtbot: QtBot) -> None:
+    controller = FakeController()
+    controller.running = True
+    w = CameraWindow(controller, Config(), VisionSignals(), devices_fn=lambda: DEVICES)
+    qtbot.addWidget(w)
+    w.show()
+    qtbot.waitUntil(lambda: w.device_combo.count() == len(DEVICES), timeout=3000)
+
+    # Let at least one tick observe running=True so the running -> not
+    # running edge can be detected on the next tick.
+    qtbot.waitUntil(lambda: w._was_running, timeout=1000)
+
+    calls: list[int] = []
+    original_stop_camera = w.stop_camera
+
+    def counting_stop_camera() -> None:
+        calls.append(1)
+        original_stop_camera()
+
+    w.stop_camera = counting_stop_camera  # type: ignore[method-assign]
+
+    # Fake "still showing the last live frame" state that only stop_camera()'s
+    # cleanup would reset, so the assertions below prove the edge fired
+    # rather than merely restating the widgets' initial state.
+    w.preview_label.setText("stale live frame")
+    w.meters[Hand.RIGHT].setValue(0.7)
+    w.state_labels[Hand.RIGHT].setText("Closed")
+
+    controller.running = False
+    controller.error = "tracker graph crashed"
+
+    qtbot.waitUntil(lambda: len(calls) >= 1, timeout=1000)
+    assert "tracker graph crashed" in w.status_label.text()
+    assert w.preview_label.text() == "Camera off"
+    for hand in Hand:
+        assert w.state_labels[hand].text() == "Not seen"
+        assert w.meters[hand].value() == 0.0
+    assert w.start_button.isEnabled()
+    assert not w.stop_button.isEnabled()
+    assert not w.calibrate_button.isEnabled()
+
+    # Cleanup must run exactly once even though the controller stays "dead"
+    # for further ticks.
+    qtbot.wait(400)
+    assert len(calls) == 1
+
+
+def test_export_button_enabled_only_with_a_calibration_result(window: tuple, qtbot: QtBot) -> None:
+    w, controller, _engine = window
+    assert not w.export_button.isEnabled()  # disabled at start
+
+    w.start_camera()
+    qtbot.waitUntil(lambda: controller.running, timeout=3000)
+    assert not w.export_button.isEnabled()
+
+    w.begin_calibration()
+    assert not w.export_button.isEnabled()  # disabled again until a result exists
+
+    result = CalibrationResult(levels=Levels(0.9, 0.3), cycles=5, status="ok")
+    w.show_result(result)
+    assert w.export_button.isEnabled()
+
+    w.stop_camera()
+    assert not w.export_button.isEnabled()  # disabled after stop
