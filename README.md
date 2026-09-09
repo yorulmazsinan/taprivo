@@ -18,7 +18,7 @@ game mechanic, not API tokens or credits.
 ## What it does
 
 - Every tap adds 10 Motion Energy (× combo multiplier, up to 2×) to a session balance (cap 10,000); a camera squeeze counts as five taps (50 energy). Hold a steady beat and the energy per tap rises by another 25 %.
-- A small always-on-top HUD (dark or light theme) shows energy, a chip per drumming key on each hand, combo and multiplier, rate and tempo, camera and MCP status.
+- A small always-on-top HUD (dark or light theme) leads with the energy number and its bar, then a hand map: two hand silhouettes whose finger tips light up as you drum, with the key caps under each finger. Combo and multiplier, rate and tempo, and camera and MCP status badges sit alongside.
 - A local MCP server on `http://127.0.0.1:32145/mcp` exposes `get_energy`,
   `spend_energy`, `get_stats` and `get_session`.
 - Claude Code reads the balance and spends a suitable amount before a

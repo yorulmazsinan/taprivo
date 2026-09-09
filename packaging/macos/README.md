@@ -87,6 +87,20 @@ Smoke-test a bundle without installing it:
 .build/macos/dist/Taprivo.app/Contents/MacOS/Taprivo doctor --json
 ```
 
+## Icon
+
+`icon.svg` is the only source of the app icon. `Taprivo.icns` (used by the
+bundle) and `src/taprivo/resources/icon.png` (used by the running app's windows
+and the Dock) are both committed and both generated from it:
+
+```bash
+uv run python packaging/macos/make_icon.py
+```
+
+The script renders every `.iconset` size with Qt, folds them up with `iconutil`
+and removes the temporary iconset. Regenerate and commit both files after
+editing the SVG.
+
 ## Camera permission
 
 The bundle asks for camera access under its own bundle identifier,
