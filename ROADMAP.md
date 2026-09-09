@@ -8,7 +8,7 @@ Status labels: implemented, in development, planned. Dates are not promises.
 - Camera capture and two-hand squeeze detector: implemented (beta)
 - Calibration onboarding: implemented (beta)
 - Separate background service shared by the HUD and CLI: planned
-- Signed macOS package: planned
+- Signed macOS package: in development
 
 ## 0.2 — Game engine
 - Two hands and combo tiers: implemented (keyboard)
