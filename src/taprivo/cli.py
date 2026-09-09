@@ -36,6 +36,7 @@ app = typer.Typer(
 
 JSON_OPTION = typer.Option(False, "--json", help="Machine-readable JSON output.")
 NOT_RUNNING_HINT = "Taprivo is not running. Start it with 'taprivo' or 'taprivo simulate'."
+CAMERA_SETTINGS_HINT = "System Settings > Privacy & Security > Camera"
 
 
 def emit_json(payload: dict[str, Any]) -> None:
@@ -131,17 +132,20 @@ def camera_probe_fn(config: Config) -> tuple[bool, str]:
         source.close()
 
 
-def fps_probe_fn(config: Config) -> float:
-    from taprivo.vision.tracker import MediaPipeHandTracker
-
+def fps_probe_fn(config: Config) -> tuple[float, str]:
+    """Read from the default camera for 5 s and run every frame through the hand
+    tracker, returning (processed fps, ""), or (-1.0, error text) if anything in
+    the probe -- opening the camera, loading mediapipe, reading a frame -- fails.
+    Never raises: a probe failure must surface as a failed check, not a crash."""
     device = default_device(list_devices_fn())
     if device is None:
-        return 0.0
-    tracker = MediaPipeHandTracker()
+        return 0.0, "no camera device"
     source = CameraSource(device.index, width=config.camera.width, height=config.camera.height)
-    processed = 0
+    tracker: Any = None
     try:
         source.open()
+        tracker = vision_tracker.MediaPipeHandTracker()
+        processed = 0
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:
             frame = source.read()
@@ -149,10 +153,13 @@ def fps_probe_fn(config: Config) -> float:
                 continue
             tracker.process(frame)
             processed += 1
+        return processed / 5.0, ""
+    except Exception as exc:  # any probe failure must become a fail check, not a crash
+        return -1.0, str(exc)
     finally:
         source.close()
-        tracker.close()
-    return processed / 5.0
+        if tracker is not None:
+            tracker.close()
 
 
 @camera_app.command("list")
@@ -165,7 +172,7 @@ def camera_list(json_output: bool = JSON_OPTION) -> None:
             raise typer.Exit(1)
         return
     if not devices:
-        fail("No camera device found. Check System Settings > Privacy & Security > Camera.", False)
+        fail(f"No camera device found. Check {CAMERA_SETTINGS_HINT}.", False)
     default = default_device(devices)
     for d in devices:
         signal = "signal" if d.has_signal else "no signal"
@@ -388,6 +395,9 @@ def _endpoint_checks(config: Config) -> list[Check]:
 
 
 def _camera_checks(config: Config, probe: bool) -> list[Check]:
+    """model/mediapipe/camera_devices are metadata-only and always run. The camera
+    is only ever opened -- via camera_probe_fn/fps_probe_fn -- when `probe` is set
+    (the CLI's --camera-probe flag), and never while Taprivo itself is running."""
     checks: list[Check] = []
     try:
         vision_tracker.verify_model()
@@ -410,9 +420,9 @@ def _camera_checks(config: Config, probe: bool) -> list[Check]:
         checks.append(
             Check(
                 "camera_devices",
-                "fail",
-                "no camera device found",
-                "connect a camera or allow camera access in System Settings",
+                "warn",
+                "no camera devices found; the keyboard simulator still works",
+                "connect a camera if you want hand tracking",
             )
         )
         return checks
@@ -425,6 +435,20 @@ def _camera_checks(config: Config, probe: bool) -> list[Check]:
             "" if signal else "select a camera that shows an image in the Camera window",
         )
     )
+    if not probe:
+        return checks
+    lock = paths.InstanceLock()
+    if not lock.acquire():
+        checks.append(
+            Check(
+                "camera_permission",
+                "warn",
+                "Taprivo is running; camera probe skipped",
+                "quit Taprivo and rerun doctor --camera-probe",
+            )
+        )
+        return checks
+    lock.release()
     ok, detail = camera_probe_fn(config)
     checks.append(
         Check(
@@ -433,14 +457,22 @@ def _camera_checks(config: Config, probe: bool) -> list[Check]:
             detail,
             ""
             if ok
-            else (
-                "allow camera access for your terminal or Taprivo in "
-                "System Settings > Privacy & Security > Camera"
-            ),
+            else f"allow camera access for your terminal or Taprivo in {CAMERA_SETTINGS_HINT}",
         )
     )
-    if probe and ok:
-        fps = fps_probe_fn(config)
+    if not ok:
+        return checks
+    fps, error = fps_probe_fn(config)
+    if fps < 0:
+        checks.append(
+            Check(
+                "camera_fps",
+                "fail",
+                f"probe failed: {error}",
+                "check camera permission and that no other app holds the camera",
+            )
+        )
+    else:
         checks.append(
             Check(
                 "camera_fps",
@@ -456,7 +488,9 @@ def _camera_checks(config: Config, probe: bool) -> list[Check]:
 def doctor(
     json_output: bool = JSON_OPTION,
     camera_probe: bool = typer.Option(
-        False, "--camera-probe", help="Measure processed camera fps for 5 s."
+        False,
+        "--camera-probe",
+        help="Open the camera to check permission and measure processed fps for 5 s.",
     ),
 ) -> None:
     """Diagnose the local endpoint, token and Claude Code integration."""
