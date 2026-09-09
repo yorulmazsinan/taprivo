@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import asdict
 from datetime import UTC, datetime
@@ -13,12 +12,12 @@ from typing import Any, NoReturn
 import typer
 
 from taprivo import __version__, paths
-from taprivo.adapters.base import AgentAdapter, Check, SetupError, SetupOptions, SetupPlan
-from taprivo.adapters.claude import ClaudeAdapter
-from taprivo.adapters.cursor import CursorAdapter
+from taprivo.adapters import make_claude_adapter, make_cursor_adapter
+from taprivo.adapters.base import AgentAdapter, SetupError, SetupOptions, SetupPlan
 from taprivo.config import Config, ConfigError, load_config
 from taprivo.core.stats_sink import DailyRow
 from taprivo.core.stats_store import StatsStore
+from taprivo.doctor import CAMERA_SETTINGS_HINT, overall_ok, run_checks
 from taprivo.mcp.client import (
     ClientError,
     LocalClient,
@@ -28,9 +27,7 @@ from taprivo.mcp.client import (
     for_config,
     run_sync,
 )
-from taprivo.mcp.server import TOOL_NAMES, port_is_free
-from taprivo.vision import tracker as vision_tracker
-from taprivo.vision.camera import CameraError, CameraSource, default_device, list_devices
+from taprivo.vision.camera import default_device, list_devices
 
 app = typer.Typer(
     add_completion=False,
@@ -44,7 +41,6 @@ NO_VALUE = "–"  # noqa: RUF001
 NOT_RUNNING_HINT = "Taprivo is not running. Start it with 'taprivo' or 'taprivo simulate'."
 NO_STATS_HINT = "No statistics file yet. Run Taprivo once with stats.enabled: true to create it."
 HISTORY_HEADER = "Day         Sessions  Taps  Generated  Spent  Active"
-CAMERA_SETTINGS_HINT = "System Settings > Privacy & Security > Camera"
 
 
 def emit_json(payload: dict[str, Any]) -> None:
@@ -119,55 +115,6 @@ camera_app = typer.Typer(help="Camera devices.")
 app.add_typer(camera_app, name="camera")
 
 list_devices_fn = list_devices
-
-
-def camera_probe_fn(config: Config) -> tuple[bool, str]:
-    devices = list_devices_fn()
-    device = default_device(devices, prefer_builtin=config.camera.prefer_builtin)
-    if device is None:
-        return False, "no camera device"
-    source = CameraSource(device.index, width=config.camera.width, height=config.camera.height)
-    try:
-        source.open()
-        deadline = time.monotonic() + 3.0
-        while time.monotonic() < deadline:
-            if source.read() is not None:
-                return True, f"read a frame from camera {device.index}"
-        return False, f"camera {device.index} opened but delivered no frame within 3 s"
-    except CameraError as exc:
-        return False, str(exc)
-    finally:
-        source.close()
-
-
-def fps_probe_fn(config: Config) -> tuple[float, str]:
-    """Read from the default camera for 5 s and run every frame through the hand
-    tracker, returning (processed fps, ""), or (-1.0, error text) if anything in
-    the probe -- opening the camera, loading mediapipe, reading a frame -- fails.
-    Never raises: a probe failure must surface as a failed check, not a crash."""
-    device = default_device(list_devices_fn(), prefer_builtin=config.camera.prefer_builtin)
-    if device is None:
-        return 0.0, "no camera device"
-    source = CameraSource(device.index, width=config.camera.width, height=config.camera.height)
-    tracker: Any = None
-    try:
-        source.open()
-        tracker = vision_tracker.MediaPipeHandTracker()
-        processed = 0
-        deadline = time.monotonic() + 5.0
-        while time.monotonic() < deadline:
-            frame = source.read()
-            if frame is None:
-                continue
-            tracker.process(frame)
-            processed += 1
-        return processed / 5.0, ""
-    except Exception as exc:  # any probe failure must become a fail check, not a crash
-        return -1.0, str(exc)
-    finally:
-        source.close()
-        if tracker is not None:
-            tracker.close()
 
 
 @camera_app.command("list")
@@ -384,14 +331,6 @@ app.add_typer(setup_app, name="setup")
 app.add_typer(remove_app, name="remove")
 
 
-def make_claude_adapter(config: Config) -> ClaudeAdapter:
-    return ClaudeAdapter(config)
-
-
-def make_cursor_adapter(config: Config) -> CursorAdapter:
-    return CursorAdapter(config)
-
-
 def _print_plan(plan: SetupPlan, dry_run: bool) -> None:
     title = "Dry run: planned actions" if dry_run else "Planned actions"
     typer.echo(f"{title}:")
@@ -563,163 +502,6 @@ def remove_cursor(
     )
 
 
-def _endpoint_checks(config: Config) -> list[Check]:
-    checks: list[Check] = []
-    try:
-        names = run_sync(for_config(config).tool_names())
-    except TokenMissingError:
-        checks.append(
-            Check(
-                "endpoint",
-                "fail",
-                "no token file yet",
-                "start Taprivo once with 'taprivo simulate'",
-            )
-        )
-        return checks
-    except NotRunningError:
-        if not port_is_free(config.server.host, config.server.port):
-            checks.append(
-                Check(
-                    "endpoint",
-                    "fail",
-                    f"port {config.server.port} is bound by another process",
-                    "set server.port in config.yaml, then run 'taprivo setup claude' again",
-                )
-            )
-        else:
-            checks.append(
-                Check(
-                    "endpoint", "fail", "Taprivo is not running", "start it with 'taprivo simulate'"
-                )
-            )
-        return checks
-    except UnauthorizedError:
-        checks.append(Check("endpoint", "ok", f"app reachable at {config.endpoint_url}"))
-        checks.append(
-            Check(
-                "auth",
-                "fail",
-                "stored token rejected",
-                "quit Taprivo, then run 'taprivo setup claude'",
-            )
-        )
-        return checks
-    except ClientError as exc:
-        checks.append(Check("endpoint", "fail", str(exc), "run 'taprivo simulate' and retry"))
-        return checks
-    checks.append(Check("endpoint", "ok", f"app reachable at {config.endpoint_url}"))
-    checks.append(Check("auth", "ok", "token accepted"))
-    if set(names) == set(TOOL_NAMES):
-        checks.append(Check("tools", "ok", f"{len(names)} tools listed"))
-    else:
-        checks.append(
-            Check("tools", "fail", f"unexpected tools: {sorted(names)}", "reinstall Taprivo")
-        )
-    return checks
-
-
-def _camera_checks(config: Config, probe: bool) -> list[Check]:
-    """model/mediapipe checks are metadata-only. Device enumeration (camera_devices)
-    briefly opens each camera index except an iPhone Continuity Camera (opening
-    one wakes the phone) to detect a signal, and runs unconditionally.
-    The permission and fps probes (camera_probe_fn/fps_probe_fn) only run when
-    `probe` is set (the CLI's --camera-probe flag), and never while Taprivo itself
-    is running."""
-    checks: list[Check] = []
-    try:
-        vision_tracker.verify_model()
-        checks.append(Check("model", "ok", "hand landmark model present and verified"))
-    except vision_tracker.ModelError as exc:
-        checks.append(Check("model", "fail", str(exc), "reinstall Taprivo"))
-    if vision_tracker.available():
-        checks.append(Check("mediapipe", "ok", "mediapipe importable"))
-    else:
-        checks.append(
-            Check(
-                "mediapipe",
-                "fail",
-                "mediapipe not installed",
-                "run 'uv sync' in the Taprivo checkout",
-            )
-        )
-    devices = list_devices_fn()
-    if not devices:
-        checks.append(
-            Check(
-                "camera_devices",
-                "warn",
-                "no camera devices found; the keyboard simulator still works",
-                "connect a camera if you want hand tracking",
-            )
-        )
-        return checks
-    signal = [d for d in devices if d.has_signal]
-    builtin = next((d for d in devices if d.kind == "builtin"), None)
-    detail = f"{len(devices)} device(s), {len(signal)} with signal"
-    if builtin is not None:
-        detail += "; built-in camera: " + (builtin.name or f"camera {builtin.index}")
-    checks.append(
-        Check(
-            "camera_devices",
-            "ok" if signal else "warn",
-            detail,
-            "" if signal else "select a camera that shows an image in the Camera window",
-        )
-    )
-    if not probe:
-        return checks
-    lock = paths.InstanceLock()
-    if not lock.acquire():
-        checks.append(
-            Check(
-                "camera_permission",
-                "warn",
-                "Taprivo is running; camera probe skipped",
-                "quit Taprivo and rerun doctor --camera-probe",
-            )
-        )
-        return checks
-    lock.release()
-    ok, detail = camera_probe_fn(config)
-    checks.append(
-        Check(
-            "camera_permission",
-            "ok" if ok else "fail",
-            detail,
-            ""
-            if ok
-            else (
-                f"allow camera access for your terminal or Taprivo in {CAMERA_SETTINGS_HINT}; "
-                "on a MacBook with the lid closed the built-in camera stays dark — "
-                "open the lid or use another camera"
-            ),
-        )
-    )
-    if not ok:
-        return checks
-    fps, error = fps_probe_fn(config)
-    if fps < 0:
-        checks.append(
-            Check(
-                "camera_fps",
-                "fail",
-                f"probe failed: {error}",
-                "check camera permission and that no other app holds the camera",
-            )
-        )
-    else:
-        checks.append(
-            Check(
-                "camera_fps",
-                "ok" if fps >= 20 else "warn",
-                f"{fps:.1f} processed fps over 5 s",
-                "" if fps >= 20 else "close other camera apps or lower camera.width/height",
-            )
-        )
-    return checks
-
-
 @app.command()
 def doctor(
     json_output: bool = JSON_OPTION,
@@ -736,13 +518,8 @@ def doctor(
     and measures fps.
     """
     config = load_config_or_exit(json_output)
-    checks = (
-        _endpoint_checks(config)
-        + _camera_checks(config, camera_probe)
-        + make_claude_adapter(config).verify()
-        + make_cursor_adapter(config).verify()
-    )
-    ok = all(check.status != "fail" for check in checks)
+    checks = run_checks(config, camera_probe=camera_probe)
+    ok = overall_ok(checks)
     if json_output:
         emit_json(
             {
