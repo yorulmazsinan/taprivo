@@ -195,12 +195,12 @@ cmd_dmg() {
 
 cmd_all() {
     cmd_build
-    if [ -n "${TAPRIVO_SIGN_IDENTITY:-}" ] && [ -n "${TAPRIVO_NOTARY_PROFILE:-}" ]; then
+    if [ -n "${TAPRIVO_SIGN_IDENTITY:-}" ] && { [ -n "${TAPRIVO_NOTARY_PROFILE:-}" ] || [ -n "${TAPRIVO_NOTARY_KEY:-}" ]; }; then
         cmd_sign
         cmd_notarize
     else
         warn "**********************************************************************"
-        warn "TAPRIVO_SIGN_IDENTITY and/or TAPRIVO_NOTARY_PROFILE are not set."
+        warn "TAPRIVO_SIGN_IDENTITY and/or the notarization credentials (TAPRIVO_NOTARY_PROFILE or TAPRIVO_NOTARY_KEY) are not set."
         warn "Producing an UNSIGNED, UN-NOTARIZED build. Gatekeeper will refuse to"
         warn "open it by double-click; users have to right-click the app and choose"
         warn "Open. Do not publish this artifact."
