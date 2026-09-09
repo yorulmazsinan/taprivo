@@ -13,6 +13,11 @@ def test_defaults(taprivo_home: Path) -> None:
     assert cfg.combo.timeout_ms == 600
     assert cfg.combo.energy_multiplier_enabled is True
     assert [(tier.at, tier.multiplier) for tier in cfg.combo.tiers] == [(10, 1.5), (25, 2.0)]
+    assert cfg.rhythm.enabled is True
+    assert cfg.rhythm.window == 8
+    assert cfg.rhythm.tolerance == 0.15
+    assert (cfg.rhythm.bpm_min, cfg.rhythm.bpm_max) == (60, 240)
+    assert cfg.rhythm.steady_multiplier == 1.25
     assert cfg.simulator.max_taps_per_second == 12
     assert cfg.server.port == 32145
     assert cfg.server.max_reason_length == 200
@@ -186,4 +191,37 @@ def test_unknown_stats_key_rejected(taprivo_home: Path) -> None:
     taprivo_home.mkdir(parents=True)
     (taprivo_home / "config.yaml").write_text("stats:\n  keep_days: 30\n")
     with pytest.raises(ConfigError, match="keep_days"):
+        load_config()
+
+
+def test_rhythm_override(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text(
+        "rhythm:\n  enabled: false\n  steady_multiplier: 1.5\n  window: 6\n"
+    )
+    cfg = load_config()
+    assert cfg.rhythm.enabled is False
+    assert cfg.rhythm.steady_multiplier == 1.5
+    assert cfg.rhythm.window == 6
+    assert cfg.rhythm.tolerance == 0.15  # untouched keys keep the shipped default
+
+
+def test_rhythm_bpm_range_must_ascend(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text("rhythm:\n  bpm_min: 240\n  bpm_max: 60\n")
+    with pytest.raises(ConfigError) as exc:
+        load_config()
+    assert "bpm_min" in str(exc.value)
+
+
+def test_rhythm_bounds(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text("rhythm:\n  window: 3\n")
+    with pytest.raises(ConfigError):
+        load_config()
+    (taprivo_home / "config.yaml").write_text("rhythm:\n  tolerance: 0\n")
+    with pytest.raises(ConfigError):
+        load_config()
+    (taprivo_home / "config.yaml").write_text("rhythm:\n  steady_multiplier: 0.5\n")
+    with pytest.raises(ConfigError):
         load_config()

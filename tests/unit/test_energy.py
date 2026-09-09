@@ -7,7 +7,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from taprivo.config import ComboConfig, ComboTier, Config, EnergyConfig
+from taprivo.config import ComboConfig, ComboTier, Config, EnergyConfig, RhythmConfig
 from taprivo.core.energy import EnergyEngine, SpendError, SpendRequest
 from taprivo.core.events import Finger, Hand, TapEvent, TapSource
 
@@ -46,7 +46,8 @@ def spend(engine: EnergyEngine, amount: int, request_id: str = "r1", **kw: objec
 
 
 def make_engine(max_energy: int = 10000) -> EnergyEngine:
-    """An engine with the combo multiplier off, so every tap credits exactly 10."""
+    """An engine with the combo multiplier off: a tap credits 10 unless the
+    tap timestamps also happen to spell out a steady beat."""
     cfg = Config(
         energy=EnergyConfig(energy_per_tap=10, max_energy=max_energy),
         combo=ComboConfig(energy_multiplier_enabled=False),
@@ -364,3 +365,82 @@ def test_reset_clears_per_hand_counters() -> None:
     snap = engine.snapshot()
     assert snap.taps_per_hand == {Hand.LEFT: 0, Hand.RIGHT: 0}
     assert snap.combo_multiplier == 1.0
+
+
+def test_steady_beat_stacks_on_top_of_the_combo() -> None:
+    engine = make_multiplier_engine()
+    # 500 ms apart: inside the 600 ms combo window and a clean 120 BPM.
+    expected = 0
+    for count in range(1, 11):
+        tap(engine, ts=count * 500)
+        steady = count >= 5  # four intervals are needed before the beat counts
+        combo = 1.5 if count >= 10 else 1.0
+        expected += round(10 * combo * (1.25 if steady else 1.0))
+        snap = engine.snapshot()
+        assert snap.rhythm_steady is steady, count
+        assert snap.available == expected, count
+    snap = engine.snapshot()
+    assert snap.bpm == 120.0
+    assert snap.combo_multiplier == 1.5
+    assert snap.rhythm_multiplier == 1.25
+    # The tenth tap alone is worth 10 x 1.5 x 1.25.
+    assert round(10 * snap.combo_multiplier * snap.rhythm_multiplier) == 19
+
+
+def test_snapshot_reports_no_rhythm_before_any_tap() -> None:
+    snap = make_engine().snapshot()
+    assert snap.bpm == 0.0
+    assert snap.rhythm_steady is False
+    assert snap.rhythm_multiplier == 1.0
+
+
+def test_uneven_taps_earn_no_rhythm_bonus() -> None:
+    engine = make_engine()
+    ts = 0
+    for index in range(12):
+        ts += 550 if index % 2 else 350
+        tap(engine, ts=ts)
+    snap = engine.snapshot()
+    assert snap.bpm > 0
+    assert snap.rhythm_steady is False
+    assert snap.rhythm_multiplier == 1.0
+    assert snap.available == 120
+
+
+def test_disabled_rhythm_reports_the_beat_without_paying_for_it() -> None:
+    cfg = Config(
+        energy=EnergyConfig(energy_per_tap=10),
+        combo=ComboConfig(energy_multiplier_enabled=False),
+        rhythm=RhythmConfig(enabled=False),
+    )
+    engine = EnergyEngine(cfg, now_ms=lambda: 0)
+    for count in range(1, 11):
+        tap(engine, ts=count * 500)
+    snap = engine.snapshot()
+    assert snap.bpm == 120.0
+    assert snap.rhythm_steady is True
+    assert snap.rhythm_multiplier == 1.0
+    assert snap.available == 100
+
+
+def test_a_pause_breaks_the_beat_and_the_bonus() -> None:
+    engine = make_engine()
+    for count in range(1, 9):
+        tap(engine, ts=count * 500)
+    assert engine.snapshot().rhythm_multiplier == 1.25
+    tap(engine, ts=60_000)
+    snap = engine.snapshot()
+    assert snap.bpm == 0.0
+    assert snap.rhythm_steady is False
+    assert snap.rhythm_multiplier == 1.0
+
+
+def test_reset_session_clears_the_rhythm() -> None:
+    engine = make_engine()
+    for count in range(1, 9):
+        tap(engine, ts=count * 500)
+    assert engine.snapshot().rhythm_steady is True
+    snap = engine.reset_session()
+    assert snap.bpm == 0.0
+    assert snap.rhythm_steady is False
+    assert snap.rhythm_multiplier == 1.0

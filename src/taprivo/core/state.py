@@ -45,6 +45,9 @@ class AppSnapshot:
     camera_fps: float = 0.0
     detection_ratio: float = 0.0
     combo_multiplier: float = 1.0
+    bpm: float = 0.0
+    rhythm_steady: bool = False
+    rhythm_multiplier: float = 1.0
     taps_per_hand: dict[Hand, int] = field(default_factory=dict)
     taps_per_hand_finger: dict[tuple[Hand, Finger], int] = field(default_factory=dict)
     schema_version: int = field(default=1)
