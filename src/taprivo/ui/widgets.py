@@ -26,7 +26,7 @@ from taprivo.ui.theme import DARK, Palette
 StatusKind = Literal["ok", "warn", "err", "off"]
 
 
-def _blend(base: QColor, tint: QColor, ratio: float) -> QColor:
+def blend(base: QColor, tint: QColor, ratio: float) -> QColor:
     """Mix `tint` into `base`; ratio 0 keeps the base, 1 returns the tint."""
     ratio = max(0.0, min(1.0, ratio))
     return QColor(
@@ -79,6 +79,9 @@ class EnergyBar(QWidget):
     def setAccent(self, color: str) -> None:
         self._accent = QColor(color)
         self.update()
+
+    def accent(self) -> str:
+        return self._accent.name()
 
     def setTrackColor(self, color: str) -> None:
         self._track_color = QColor(color)
@@ -359,8 +362,8 @@ class Badge(QWidget):
         color = _status_color(self._palette, self._kind)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         radius = rect.height() / 2
-        background = _blend(QColor(self._palette.surface_alt), color, 0.14)
-        painter.setPen(QPen(_blend(QColor(self._palette.border), color, 0.45), 1))
+        background = blend(QColor(self._palette.surface_alt), color, 0.14)
+        painter.setPen(QPen(blend(QColor(self._palette.border), color, 0.45), 1))
         painter.setBrush(background)
         painter.drawRoundedRect(rect, radius, radius)
 
@@ -576,7 +579,7 @@ class HandMap(QWidget):
         level = self._flash.get((hand, finger), 0.0)
         if self._counts.get((hand, finger), 0):
             level = max(level, self.IDLE_TINT)
-        return _blend(base, tint, level)
+        return blend(base, tint, level)
 
     def _paint_hand(self, painter: QPainter, hand: Hand, height: float, stroke: float) -> None:
         palm_top = height * self.PALM_TOP
@@ -636,7 +639,7 @@ class HandMap(QWidget):
                 painter.setBrush(halo)
                 painter.drawEllipse(tip, stroke * 0.95, stroke * 0.95)
             else:
-                color = _blend(QColor(self._palette.surface_alt), color, self.IDLE_TINT + 0.3)
+                color = blend(QColor(self._palette.surface_alt), color, self.IDLE_TINT + 0.3)
             painter.setBrush(color)
             painter.drawEllipse(tip, stroke * 0.52, stroke * 0.52)
 
