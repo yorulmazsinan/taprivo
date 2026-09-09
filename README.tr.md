@@ -17,8 +17,8 @@ veya kredi değildir.
 
 ## Ne yapar?
 
-- Her vuruş oturum bakiyesine 10 Motion Energy ekler (× combo çarpanı, en çok 2×; üst sınır 10.000); bir kamera sıkması beş vuruş sayılır (50 enerji).
-- Küçük, her zaman üstte duran HUD (koyu veya açık tema) enerjiyi, her elin tuş sayımlarını, combo'yu ve çarpanını, hızı, kamera ve MCP durumunu gösterir.
+- Her vuruş oturum bakiyesine 10 Motion Energy ekler (× combo çarpanı, en çok 2×; üst sınır 10.000); bir kamera sıkması beş vuruş sayılır (50 enerji). Temponuzu sabit tutarsanız vuruş başına enerji %25 daha artar.
+- Küçük, her zaman üstte duran HUD (koyu veya açık tema) enerjiyi, her elin tuş sayımlarını, combo'yu ve çarpanını, hızı ve tempoyu, kamera ve MCP durumunu gösterir.
 - `http://127.0.0.1:32145/mcp` adresindeki yerel MCP sunucusu `get_energy`,
   `spend_energy`, `get_stats` ve `get_session` araçlarını sunar.
 - Claude Code, seçtiğiniz talimat dosyasına uyarak büyük bir uygulama
@@ -78,8 +78,9 @@ uv run taprivo simulate
 HUD klavye modu açık olarak gelir; iki el de rakam sırasındadır. Sol el
 `1` `2` `3` `4` (serçeden işarete), sağ el `7` `8` `9` `0` (işaretten
 serçeye) tuşlarına vurur. Her basış 10 enerji ekler; vuruşlar kesilmezse
-combo çarpanı 10. ardışık vuruşta 1,5×, 25. vuruşta 2× olur. Saniyede 12'yi
-aşan vuruşlar sayılmaz; basılı tutulan tuş enerji kazandırmaz.
+combo çarpanı 10. ardışık vuruşta 1,5×, 25. vuruşta 2× olur. Tempoyu 60-240
+BPM arasında düzenli tutarsanız HUD tempoyu vurgular ve 1,25× daha ekler.
+Saniyede 12'yi aşan vuruşlar sayılmaz; basılı tutulan tuş enerji kazandırmaz.
 
 Kamerayla: HUD'daki **Open Camera** düğmesine tıklayın veya `uv run taprivo calibrate` çalıştırın — bkz. [Kamera](#kamera).
 
@@ -189,6 +190,9 @@ combo:
   tiers:            # combo kademeleri: ardışık vuruş → enerji çarpanı
     - {at: 10, multiplier: 1.5}
     - {at: 25, multiplier: 2.0}
+rhythm:
+  enabled: true
+  steady_multiplier: 1.25   # düzenli tempo bonusu, combo ile çarpılır
 server:
   port: 32145
 simulator:
@@ -249,7 +253,7 @@ Kamera (MediaPipe el landmark'ları, sıkma algılayıcı) / klavye simülatör�
 | MCP araçları ve Claude Code kurulumu | uygulandı |
 | Kamerayla sıkma algılama (iki el) | uygulandı (beta) |
 | Kalibrasyon | uygulandı (beta) |
-| Ritim / BPM | planlandı |
+| Ritim / BPM | uygulandı (beta) |
 | Kalıcı istatistikler (SQLite) | uygulandı (beta) |
 | Cursor | uygulandı (beta) |
 | Diğer ajanlar (Codex, …) | planlandı |

@@ -17,8 +17,8 @@ game mechanic, not API tokens or credits.
 
 ## What it does
 
-- Every tap adds 10 Motion Energy (× combo multiplier, up to 2×) to a session balance (cap 10,000); a camera squeeze counts as five taps (50 energy).
-- A small always-on-top HUD (dark or light theme) shows energy, a chip per drumming key on each hand, combo and multiplier, rate, camera and MCP status.
+- Every tap adds 10 Motion Energy (× combo multiplier, up to 2×) to a session balance (cap 10,000); a camera squeeze counts as five taps (50 energy). Hold a steady beat and the energy per tap rises by another 25 %.
+- A small always-on-top HUD (dark or light theme) shows energy, a chip per drumming key on each hand, combo and multiplier, rate and tempo, camera and MCP status.
 - A local MCP server on `http://127.0.0.1:32145/mcp` exposes `get_energy`,
   `spend_energy`, `get_stats` and `get_session`.
 - Claude Code reads the balance and spends a suitable amount before a
@@ -80,7 +80,9 @@ The HUD opens with keyboard mode running and both hands on the number row.
 The left hand drums `1` `2` `3` `4` (pinky to index) and the right hand
 `7` `8` `9` `0` (index to pinky). Each press adds 10 energy; keep the taps
 coming and the combo multiplier lifts that to 1.5× at 10 consecutive taps and
-2× at 25. Taps above 12 per second are ignored, so a held key earns nothing.
+2× at 25. Keep an even beat between 60 and 240 BPM and the HUD highlights the
+tempo and adds a further 1.25×. Taps above 12 per second are ignored, so a held
+key earns nothing.
 
 With a camera: click **Open Camera** in the HUD or run `uv run taprivo calibrate` — see [Camera](#camera).
 
@@ -187,6 +189,9 @@ combo:
   tiers:            # combo tiers: consecutive taps → energy multiplier
     - {at: 10, multiplier: 1.5}
     - {at: 25, multiplier: 2.0}
+rhythm:
+  enabled: true
+  steady_multiplier: 1.25   # steady beat bonus, stacks with combo
 server:
   port: 32145
 simulator:
@@ -246,7 +251,7 @@ Camera (MediaPipe hand landmarks, squeeze detector) / keyboard simulator
 | MCP tools and Claude Code setup | implemented |
 | Camera squeeze detection (two hands) | implemented (beta) |
 | Calibration | implemented (beta) |
-| Rhythm / BPM | planned |
+| Rhythm / BPM | implemented (beta) |
 | Persistent stats (SQLite) | implemented (beta) |
 | Cursor | implemented (beta) |
 | Other agents (Codex, …) | planned |

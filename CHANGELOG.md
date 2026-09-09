@@ -6,6 +6,7 @@ Keep a Changelog and the project uses Semantic Versioning.
 ## [Unreleased]
 
 ### Added
+- Steady-beat bonus: taps that hold an even tempo between 60 and 240 BPM are worth 1.25× more energy (`rhythm.steady_multiplier`), stacked on the combo multiplier. The HUD rate line shows the tempo and highlights it while the beat holds, `taprivo stats` prints a `Rhythm:` line, and `get_stats` reports `bpm`, `rhythm_steady` and `rhythm_multiplier`.
 - Cursor adapter: `taprivo setup cursor` registers the MCP endpoint in `~/.cursor/mcp.json` (mode 0600, backup first), `--install-instructions` writes `~/.cursor/taprivo.md` and, with `--project`, a `.cursor/rules/taprivo.mdc` rule; `taprivo remove cursor` undoes it and `taprivo doctor` reports the Cursor registration and instruction checks.
 - Project `.cursor/mcp.json` entries reference `${env:TAPRIVO_TOKEN}` instead of the literal token.
 - `--json` output for the `setup` and `remove` commands of both agents, which now share one code path.
