@@ -9,7 +9,7 @@ Keep a Changelog and the project uses Semantic Versioning.
 - Camera-based squeeze detection (open → fist → open) with MediaPipe hand landmarks; two hands tracked independently; one squeeze counts as five taps (50 energy).
 - Camera window: device probing with no-signal detection, live preview, per-hand openness meters, guided calibration with session levels and feature-only CSV export.
 - Redesigned HUD and Camera window with a dark/light theme; new `hud.theme` config key (`system`, `dark`, `light`).
-- CLI: `taprivo camera list`, `taprivo calibrate`; `status` shows camera fps and hand detection ratio; `doctor` checks the bundled model, mediapipe, camera devices and permission, plus an optional `--camera-probe` fps measurement.
+- CLI: `taprivo camera list`, `taprivo calibrate`; `status` shows camera fps and hand detection ratio; `doctor` checks the bundled model, mediapipe and camera devices, and `doctor --camera-probe` opens the camera to check permission and measure processed fps.
 - MCP `get_session` fields `camera_fps` and `detection_ratio`.
 
 ### Changed

@@ -10,7 +10,7 @@ Run before every release that touches `vision/`. One row per environment.
 5. Typing test: type on the keyboard with both hands in view for 3 minutes. Expected ≤ 2 cycles.
 6. Two hands: squeeze both hands together 5 times. Expected 10 cycles (5 per hand).
 7. `uv run taprivo doctor --camera-probe` for processed fps (expected ≥ 20).
-8. Optional: export the calibration CSV and attach it to the PR as `tests/fixtures/landmarks/squeeze-<date>.csv` with its pinned `*.events.json`.
+8. Optional: record the landmarks of the 20-squeeze run in the fixture format described in `tests/fixtures/landmarks/README.md` and pin it as `tests/fixtures/landmarks/squeeze-<date>.csv` with its `*.events.json`.
 
 ## Results
 
