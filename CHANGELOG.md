@@ -5,6 +5,10 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0b3] - 2026-09-09
+
+Beta preview with a Cursor adapter, persistent statistics and a rhythm bonus.
+
 ### Added
 - Steady-beat bonus: taps that hold an even tempo between 60 and 240 BPM are worth 1.25× more energy (`rhythm.steady_multiplier`), stacked on the combo multiplier. The HUD rate line shows the tempo and highlights it while the beat holds, `taprivo stats` prints a `Rhythm:` line, and `get_stats` reports `bpm`, `rhythm_steady` and `rhythm_multiplier`.
 - Cursor adapter: `taprivo setup cursor` registers the MCP endpoint in `~/.cursor/mcp.json` (mode 0600, backup first), `--install-instructions` writes `~/.cursor/taprivo.md` and, with `--project`, a `.cursor/rules/taprivo.mdc` rule; `taprivo remove cursor` undoes it and `taprivo doctor` reports the Cursor registration and instruction checks.
@@ -68,7 +72,8 @@ macOS package yet.
 - No camera support yet; the balance resets when the app quits.
 - Only Claude Code is tested as an MCP client.
 
-[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b2...HEAD
+[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b3...HEAD
+[0.1.0b3]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b3
 [0.1.0b2]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b2
 [0.1.0b1]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b1
 [0.1.0a1]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0a1

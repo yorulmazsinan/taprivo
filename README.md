@@ -10,7 +10,7 @@ Motion Energy, and let Claude Code read and spend it through MCP. Hand tracking
 runs locally on your device; camera frames never leave it. Motion Energy is a
 game mechanic, not API tokens or credits.
 
-> **Status: beta (0.1.0b2).** Camera-based
+> **Status: beta (0.1.0b3).** Camera-based
 > squeeze detection with calibration is available alongside the keyboard
 > simulator. Tested on macOS on Apple Silicon with the built-in FaceTime
 > camera.
@@ -56,12 +56,12 @@ closed.
 Install Taprivo as a global command with [uv](https://docs.astral.sh/uv/) (or pipx):
 
 ```bash
-uv tool install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b2"
+uv tool install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b3"
 taprivo
 taprivo simulate
 ```
 
-pipx works the same way: `pipx install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b2"`.
+pipx works the same way: `pipx install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b3"`.
 The install takes about 1.5 GB because of mediapipe, OpenCV and Qt. Upgrade with
 `uv tool upgrade taprivo`, remove with `uv tool uninstall taprivo`.
 

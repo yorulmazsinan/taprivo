@@ -11,7 +11,7 @@ tuşlara basın), Motion Energy biriktirin ve Claude Code bu bakiyeyi MCP
 kareleri cihazınızdan çıkmaz. Motion Energy bir oyun mekaniğidir; API token'ı
 veya kredi değildir.
 
-> **Durum: beta (0.1.0b2).** Kamerayla sıkma
+> **Durum: beta (0.1.0b3).** Kamerayla sıkma
 > algılama ve kalibrasyon, klavye simülatörünün yanında kullanılabilir. Apple
 > Silicon macOS üzerinde dahili FaceTime kamerayla test edilmiştir.
 
@@ -55,12 +55,12 @@ toplamları yerel bir SQLite dosyasına yazılır; `taprivo stats --today` ve
 Taprivo'yu [uv](https://docs.astral.sh/uv/) (ya da pipx) ile global bir komut olarak kurun:
 
 ```bash
-uv tool install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b2"
+uv tool install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b3"
 taprivo
 taprivo simulate
 ```
 
-pipx de aynı şekilde çalışır: `pipx install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b2"`.
+pipx de aynı şekilde çalışır: `pipx install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b3"`.
 Kurulum mediapipe, OpenCV ve Qt nedeniyle yaklaşık 1,5 GB yer kaplar. Güncellemek için
 `uv tool upgrade taprivo`, kaldırmak için `uv tool uninstall taprivo`.
 
