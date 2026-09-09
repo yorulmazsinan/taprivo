@@ -49,7 +49,23 @@ later release.
 - Python 3.12 or 3.13 and [uv](https://docs.astral.sh/uv/)
 - [Claude Code](https://code.claude.com) for the agent integration
 
-## Quickstart (simulator, no camera)
+## Install
+
+Install Taprivo as a global command with [uv](https://docs.astral.sh/uv/) (or pipx):
+
+```bash
+uv tool install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b2"
+taprivo
+taprivo simulate
+```
+
+pipx works the same way: `pipx install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b2"`.
+The install takes about 1.5 GB because of mediapipe, OpenCV and Qt. Upgrade with
+`uv tool upgrade taprivo`, remove with `uv tool uninstall taprivo`.
+
+Contributors keep the clone and `uv sync` path below.
+
+## Quickstart (from a clone)
 
 ```bash
 git clone https://github.com/yorulmazsinan/taprivo.git
@@ -86,6 +102,25 @@ claude --project`. That writes a `.mcp.json` entry whose token comes from the
 
 `uv run taprivo remove claude` undoes the registration and removes only the
 files and blocks Taprivo added.
+
+### Cursor
+
+```bash
+uv run taprivo setup cursor --install-instructions
+uv run taprivo doctor
+```
+
+Use `taprivo setup cursor --install-instructions` when Taprivo is installed
+globally. `setup cursor` adds a `taprivo` entry to `~/.cursor/mcp.json`
+(mode 0600, a backup is written first) and, with `--install-instructions`,
+writes `~/.cursor/taprivo.md`. Cursor has no command for user rules, so paste
+the contents of that file into Settings > Rules yourself.
+
+With `--project` it also writes `.cursor/mcp.json` in the repository, where the
+token comes from the `${env:TAPRIVO_TOKEN}` environment variable, and
+`.cursor/rules/taprivo.mdc` with the same budget rules. `--dry-run` shows the
+changes without writing, and `uv run taprivo remove cursor` removes the entry
+and the files Taprivo added.
 
 ## Camera
 
@@ -126,8 +161,10 @@ Keep the whole hand inside the frame; a hand partly out of view is ignored.
 | `taprivo calibrate` | Open the Camera window for calibration |
 | `taprivo status [--json]` | Balance, tracking state, camera fps and endpoint of the running app |
 | `taprivo stats [--json]` | Session statistics |
-| `taprivo setup claude [--project] [--install-instructions] [--dry-run]` | Connect Claude Code |
-| `taprivo remove claude [--project]` | Disconnect Claude Code |
+| `taprivo setup claude [--project] [--install-instructions] [--dry-run] [--json]` | Connect Claude Code |
+| `taprivo remove claude [--project] [--json]` | Disconnect Claude Code |
+| `taprivo setup cursor [--project] [--install-instructions] [--dry-run] [--json]` | Connect Cursor |
+| `taprivo remove cursor [--project] [--json]` | Disconnect Cursor |
 | `taprivo doctor [--json] [--camera-probe]` | Diagnose the local setup; lists camera devices (briefly opens each index to detect a signal); the probe additionally checks permission and measures fps |
 
 Exit codes: 0 success, 1 operation failure, 2 invalid arguments or config.
@@ -201,7 +238,8 @@ Camera (MediaPipe hand landmarks, squeeze detector) / keyboard simulator
 | Calibration | implemented (beta) |
 | Rhythm / BPM | planned |
 | Persistent stats (SQLite) | planned |
-| Other agents (Cursor, Codex, …) | planned |
+| Cursor | implemented (beta) |
+| Other agents (Codex, …) | planned |
 
 See [ROADMAP.md](ROADMAP.md).
 
