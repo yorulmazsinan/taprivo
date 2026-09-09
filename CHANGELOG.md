@@ -5,6 +5,13 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- The camera preview draws the hand it is tracking: all 21 landmarks, with the fingertips coloured per finger, joined by the standard connections in that hand's colour (left amber, right green). Every counted squeeze sends an expanding ring out from the palm, so you can see which hand scored.
+- The preview carries a translucent strip with the processed frame rate, the share of frames a hand was found in and the selected device (`29 fps · hand 87 % · FaceTime HD Camera`), and a **Live** badge while the camera runs.
+- The openness meters are labelled with a small hand glyph in that hand's colour instead of the words "Left" and "Right", and the state beside them (Open, Closed, Not seen) is colour-coded while always staying spelled out.
+- The calibration card shows the four steps — Visibility, Open, Fist, Squeeze — as pips that fill as the session advances, and reports the result as badges rather than plain text. The window's minimum height grew so the card can no longer overlap the preview.
+- `hud.reduced_motion: true` replaces the expanding squeeze ring with a short static one; nothing else in the preview animates.
+
 ## [0.1.0b5] - 2026-09-09
 
 Beta preview: everything from the app window, and the built-in camera first.
