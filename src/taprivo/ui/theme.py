@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication
 
 from taprivo.core.events import Finger
@@ -47,7 +48,7 @@ DARK = Palette(
 )
 
 LIGHT = Palette(
-    bg="#F7F7F9",
+    bg="#F3F4F8",
     surface="#FFFFFF",
     surface_alt="#ECEEF3",
     text="#1B1E27",
@@ -58,6 +59,14 @@ LIGHT = Palette(
     warn="#F59E0B",
     err="#F87171",
 )
+
+
+def is_dark(palette: Palette) -> bool:
+    """True when the palette's background is dark, so callers can flip accents."""
+    color = QColor(palette.bg)
+    # Rec. 601 luma; the HUD only needs "is this a dark ground", not precision.
+    luma = 0.299 * color.red() + 0.587 * color.green() + 0.114 * color.blue()
+    return luma < 128
 
 
 def resolve(mode: str, app: QApplication | None) -> Palette:
@@ -102,6 +111,37 @@ def stylesheet(palette: Palette) -> str:
     QPushButton:disabled {{
         color: {palette.text_dim};
         border: 1px solid {palette.border};
+    }}
+    QToolButton {{
+        background-color: {palette.surface_alt};
+        color: {palette.text};
+        border: 1px solid {palette.border};
+        border-radius: 8px;
+        padding: 6px 10px;
+    }}
+    QToolButton:hover {{
+        border: 1px solid {palette.accent};
+    }}
+    QToolButton::menu-indicator {{
+        image: none;
+        width: 0;
+    }}
+    QMenu {{
+        background-color: {palette.surface};
+        color: {palette.text};
+        border: 1px solid {palette.border};
+        border-radius: 8px;
+        padding: 4px;
+    }}
+    QMenu::item {{
+        padding: 5px 18px 5px 12px;
+        border-radius: 6px;
+    }}
+    QMenu::item:selected {{
+        background-color: {palette.surface_alt};
+    }}
+    QMenu::item:disabled {{
+        color: {palette.text_dim};
     }}
     QPushButton#primary {{
         background-color: {palette.accent};

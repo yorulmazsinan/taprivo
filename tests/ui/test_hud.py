@@ -16,7 +16,8 @@ from tests.ui.conftest import HudBundle
 
 
 def test_initial_render(hud: HudBundle) -> None:
-    assert hud.window.energy_label.text() == "0 / 10000"
+    assert hud.window.energy_label.text() == "0"
+    assert hud.window.energy_cap_label.text() == "/ 10000"
     assert "Inactive" in hud.window.tracking_label.text()
     assert "Starting" in hud.window.mcp_label.text()
     footer = hud.window.footer_label.text()
@@ -32,7 +33,7 @@ def test_key_press_taps_when_keyboard_running(hud: HudBundle, qtbot: QtBot) -> N
     assert hud.window.toggle_button.text() == "Stop Keyboard"
     qtbot.keyClick(hud.window, "2")
     qtbot.keyClick(hud.window, "0")
-    qtbot.waitUntil(lambda: hud.window.energy_label.text() == "20 / 10000", timeout=2000)
+    qtbot.waitUntil(lambda: hud.window.energy_label.text() == "20", timeout=2000)
     assert "Ring 1" in hud.window.fingers_label.text()
     assert "Pinky 1" in hud.window.fingers_label.text()
     assert hud.window.bar.value() == 20
@@ -40,7 +41,9 @@ def test_key_press_taps_when_keyboard_running(hud: HudBundle, qtbot: QtBot) -> N
 
 
 def test_chips_cover_both_hands_and_show_their_keys(hud: HudBundle, qtbot: QtBot) -> None:
+    """The chips are hidden behind the hand map but still carry the per-key counts."""
     assert len(hud.window.chips) == 8
+    assert not hud.window.chips[(Hand.LEFT, Finger.INDEX)].isVisible()
     for key, (hand, finger) in KEY_MAP.items():
         chip = hud.window.chips[(hand, finger)]
         assert f"{key} {finger.value.title()}" in chip.text(), key
@@ -83,7 +86,7 @@ def test_reset_requires_confirmation(
         QMessageBox, "question", staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
     )
     hud.window.confirm_reset()
-    qtbot.waitUntil(lambda: hud.window.energy_label.text() == "0 / 10000", timeout=2000)
+    qtbot.waitUntil(lambda: hud.window.energy_label.text() == "0", timeout=2000)
 
 
 def test_mcp_error_is_shown(hud: HudBundle, qtbot: QtBot) -> None:
@@ -199,7 +202,8 @@ def test_rate_line_drops_the_accent_when_the_beat_breaks(qtbot: QtBot) -> None:
     assert DARK.text_dim in window.rate_label.styleSheet()
 
 
-def test_setup_button_calls_back(qtbot: QtBot) -> None:
+def test_setup_action_calls_back(qtbot: QtBot) -> None:
+    """`Setup…` lives in the overflow menu now, so the attribute is a QAction."""
     calls: list[int] = []
     engine = EnergyEngine(Config())
     window = HudWindow(
@@ -207,7 +211,7 @@ def test_setup_button_calls_back(qtbot: QtBot) -> None:
     )
     qtbot.addWidget(window)
     assert window.setup_button.text() == "Setup…"
-    window.setup_button.click()
+    window.setup_button.trigger()
     assert calls == [1]
     plain = HudWindow(engine, Simulator(engine, Config()), Config())
     qtbot.addWidget(plain)
@@ -215,14 +219,42 @@ def test_setup_button_calls_back(qtbot: QtBot) -> None:
 
 
 def test_toolbar_buttons_fit_the_window(hud: HudBundle) -> None:
-    """Five buttons on a 480 px window: every label has to fit its button."""
+    """Two primary buttons and the overflow: every label has to fit its button."""
     assert hud.window.grab().width() == 480
     buttons = (
         hud.window.toggle_button,
-        hud.window.reset_button,
-        hud.window.mcp_button,
         hud.window.open_camera_button,
-        hud.window.setup_button,
+        hud.window.more_button,
     )
     for button in buttons:
         assert button.width() >= button.sizeHint().width(), button.text()
+
+
+def test_overflow_menu_holds_the_secondary_actions(hud: HudBundle) -> None:
+    menu = hud.window.more_button.menu()
+    assert menu is not None
+    assert [action.text() for action in menu.actions()] == [
+        "Reset Session",
+        "MCP Status",
+        "Setup…",
+    ]
+    assert menu.actions() == [
+        hud.window.reset_button,
+        hud.window.mcp_button,
+        hud.window.setup_button,
+    ]
+
+
+def test_menu_actions_run_the_same_slots(hud: HudBundle, monkeypatch: pytest.MonkeyPatch) -> None:
+    asked: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *a, **k: asked.append("reset") or QMessageBox.StandardButton.No),
+    )
+    monkeypatch.setattr(
+        QMessageBox, "information", staticmethod(lambda *a, **k: asked.append("mcp"))
+    )
+    hud.window.reset_button.trigger()
+    hud.window.mcp_button.trigger()
+    assert asked == ["reset", "mcp"]
