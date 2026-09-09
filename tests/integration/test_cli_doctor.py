@@ -6,9 +6,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from taprivo import cli, paths
+from taprivo import cli, doctor, paths
 from taprivo.adapters.claude import ClaudeAdapter
 from taprivo.adapters.cursor import CursorAdapter
+from taprivo.config import Config
 from taprivo.vision.camera import CameraDevice
 from tests.integration.conftest import RunningServer, free_port
 from tests.unit.test_claude_adapter import FakeClaude
@@ -21,9 +22,11 @@ def _stub_camera(monkeypatch: pytest.MonkeyPatch) -> None:
     """These tests exercise the endpoint/auth/Claude checks, not real camera
     hardware; stub the camera hooks so results don't depend on the machine."""
     monkeypatch.setattr(
-        cli, "list_devices_fn", lambda: [CameraDevice(0, "Camera 0 (640x480)", 640, 480, True)]
+        doctor, "list_devices_fn", lambda: [CameraDevice(0, "Camera 0 (640x480)", 640, 480, True)]
     )
-    monkeypatch.setattr(cli, "camera_probe_fn", lambda config: (True, "read a frame from camera 0"))
+    monkeypatch.setattr(
+        doctor, "camera_probe_fn", lambda config: (True, "read a frame from camera 0")
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -31,7 +34,7 @@ def _stub_cursor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Point the Cursor adapter at an empty home so the checks don't depend on
     whether the machine running the tests has Cursor installed."""
     monkeypatch.setattr(
-        cli,
+        doctor,
         "make_cursor_adapter",
         lambda config: CursorAdapter(
             config, home=tmp_path / "cursor-home", cursor_bin="/nonexistent/cursor"
@@ -45,13 +48,14 @@ def fake_claude(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FakeClaude:
     script = tmp_path / "claude"
     script.write_text("#!/bin/sh\nexit 0\n")
     script.chmod(0o755)
-    monkeypatch.setattr(
-        cli,
-        "make_claude_adapter",
-        lambda config: ClaudeAdapter(
+
+    def factory(config: Config) -> ClaudeAdapter:
+        return ClaudeAdapter(
             config, home=tmp_path / "home", runner=fake_runner, claude_bin=str(script)
-        ),
-    )
+        )
+
+    monkeypatch.setattr(cli, "make_claude_adapter", factory)
+    monkeypatch.setattr(doctor, "make_claude_adapter", factory)
     return fake_runner
 
 
