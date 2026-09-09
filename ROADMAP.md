@@ -18,7 +18,8 @@ Status labels: implemented, in development, planned. Dates are not promises.
 - SQLite aggregates, daily stats, session summary, opt-in Git observation: planned
 
 ## 0.4 — Adaptive calibration and a second agent adapter
-- Adaptive squeeze levels, gesture pause/resume, one more tested client: planned
+- Second agent adapter (Cursor): implemented (beta)
+- Adaptive squeeze levels, gesture pause/resume: planned
 
 ## Out of scope for now
 Linux/Windows, remote gateways, cloud accounts, telemetry.

@@ -5,6 +5,12 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Cursor adapter: `taprivo setup cursor` registers the MCP endpoint in `~/.cursor/mcp.json` (mode 0600, backup first), `--install-instructions` writes `~/.cursor/taprivo.md` and, with `--project`, a `.cursor/rules/taprivo.mdc` rule; `taprivo remove cursor` undoes it and `taprivo doctor` reports the Cursor registration and instruction checks.
+- Project `.cursor/mcp.json` entries reference `${env:TAPRIVO_TOKEN}` instead of the literal token.
+- `--json` output for the `setup` and `remove` commands of both agents, which now share one code path.
+- Global install instructions: `uv tool install` (or pipx) from the tagged repository, with upgrade and uninstall commands.
+
 ## [0.1.0b2] - 2026-09-09
 
 Beta preview with two-hand keyboard drumming.

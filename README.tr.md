@@ -48,7 +48,23 @@ Taprivo kapanınca bakiye sıfırlanır. Kalıcı geçmiş ileriki bir sürümde
 - Python 3.12 veya 3.13 ve [uv](https://docs.astral.sh/uv/)
 - Ajan entegrasyonu için [Claude Code](https://code.claude.com)
 
-## Hızlı başlangıç (simülatör, kamerasız)
+## Kurulum
+
+Taprivo'yu [uv](https://docs.astral.sh/uv/) (ya da pipx) ile global bir komut olarak kurun:
+
+```bash
+uv tool install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b2"
+taprivo
+taprivo simulate
+```
+
+pipx de aynı şekilde çalışır: `pipx install "git+https://github.com/yorulmazsinan/taprivo.git@v0.1.0b2"`.
+Kurulum mediapipe, OpenCV ve Qt nedeniyle yaklaşık 1,5 GB yer kaplar. Güncellemek için
+`uv tool upgrade taprivo`, kaldırmak için `uv tool uninstall taprivo`.
+
+Katkı verenler aşağıdaki klon ve `uv sync` yolunu kullanmayı sürdürür.
+
+## Hızlı başlangıç (klonla)
 
 ```bash
 git clone https://github.com/yorulmazsinan/taprivo.git
@@ -85,6 +101,26 @@ Yapılandırmayı bir depo içinde paylaşmak için `uv run taprivo setup claude
 
 `uv run taprivo remove claude` kaydı geri alır ve yalnızca Taprivo'nun eklediği
 dosya ve blokları kaldırır.
+
+### Cursor
+
+```bash
+uv run taprivo setup cursor --install-instructions
+uv run taprivo doctor
+```
+
+Taprivo global olarak kuruluysa `taprivo setup cursor --install-instructions`
+komutunu kullanın. `setup cursor`, `~/.cursor/mcp.json` dosyasına bir `taprivo`
+girdisi ekler (0600 kipi, önce yedek alınır) ve `--install-instructions` ile
+`~/.cursor/taprivo.md` dosyasını yazar. Cursor'ın kullanıcı kuralları için bir
+komutu yoktur; bu dosyanın içeriğini Settings > Rules bölümüne kendiniz
+yapıştırın.
+
+`--project` ile depo içine, token'ı `${env:TAPRIVO_TOKEN}` ortam değişkeninden
+alan bir `.cursor/mcp.json` ve aynı bütçe kurallarını taşıyan
+`.cursor/rules/taprivo.mdc` dosyasını da yazar. `--dry-run` hiçbir şey yazmadan
+değişiklikleri gösterir; `uv run taprivo remove cursor` girdiyi ve Taprivo'nun
+eklediği dosyaları kaldırır.
 
 ## Kamera
 
@@ -127,8 +163,10 @@ Elin tamamını kadrajda tutun; kısmen görünen el yok sayılır.
 | `taprivo calibrate` | Kalibrasyon için Kamera penceresini aç |
 | `taprivo status [--json]` | Çalışan uygulamanın bakiyesi, takip durumu, kamera fps'i ve uç noktası |
 | `taprivo stats [--json]` | Oturum istatistikleri |
-| `taprivo setup claude [--project] [--install-instructions] [--dry-run]` | Claude Code'u bağla |
-| `taprivo remove claude [--project]` | Claude Code bağlantısını kaldır |
+| `taprivo setup claude [--project] [--install-instructions] [--dry-run] [--json]` | Claude Code'u bağla |
+| `taprivo remove claude [--project] [--json]` | Claude Code bağlantısını kaldır |
+| `taprivo setup cursor [--project] [--install-instructions] [--dry-run] [--json]` | Cursor'ı bağla |
+| `taprivo remove cursor [--project] [--json]` | Cursor bağlantısını kaldır |
 | `taprivo doctor [--json] [--camera-probe]` | Yerel kurulumu teşhis et; kamera cihazlarını listeler (sinyali görmek için her indeksi kısaca açar); prob ayrıca izni denetler ve fps ölçer |
 
 Çıkış kodları: 0 başarı, 1 işlem hatası, 2 geçersiz argüman veya yapılandırma.
@@ -203,7 +241,8 @@ Kamera (MediaPipe el landmark'ları, sıkma algılayıcı) / klavye simülatör�
 | Kalibrasyon | uygulandı (beta) |
 | Ritim / BPM | planlandı |
 | Kalıcı istatistikler (SQLite) | planlandı |
-| Diğer ajanlar (Cursor, Codex, …) | planlandı |
+| Cursor | uygulandı (beta) |
+| Diğer ajanlar (Codex, …) | planlandı |
 
 Bkz. [ROADMAP.md](ROADMAP.md).
 
