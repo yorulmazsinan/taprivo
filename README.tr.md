@@ -40,7 +40,9 @@ Enerji token, kredi ya da izin **değildir**. Mevcut görev ve ajan izinleriniz
 aynen geçerlidir; enerjinin bitmesi sizi engellemez, bütçe istendiği an
 kapatılabilir.
 
-Taprivo kapanınca bakiye sıfırlanır. Kalıcı geçmiş ileriki bir sürümde gelecek.
+Taprivo kapanınca bakiye sıfırlanır ama oturum unutulmaz: her oturum ve günlük
+toplamları yerel bir SQLite dosyasına yazılır; `taprivo stats --today` ve
+`taprivo stats --history` uygulama kapalıyken de çalışır.
 
 ## Gereksinimler
 
@@ -162,7 +164,9 @@ Elin tamamını kadrajda tutun; kısmen görünen el yok sayılır.
 | `taprivo camera list [--json]` | Kamera cihazlarını listele |
 | `taprivo calibrate` | Kalibrasyon için Kamera penceresini aç |
 | `taprivo status [--json]` | Çalışan uygulamanın bakiyesi, takip durumu, kamera fps'i ve uç noktası |
-| `taprivo stats [--json]` | Oturum istatistikleri |
+| `taprivo stats [--json]` | Çalışan uygulamanın oturum istatistikleri ve bugünün toplamları |
+| `taprivo stats --today [--json]` | Bugünün toplamları, yerel istatistik dosyasından |
+| `taprivo stats --history [--days N] [--json]` | Günlük toplamlar, en yeniden eskiye (varsayılan 30 gün) |
 | `taprivo setup claude [--project] [--install-instructions] [--dry-run] [--json]` | Claude Code'u bağla |
 | `taprivo remove claude [--project] [--json]` | Claude Code bağlantısını kaldır |
 | `taprivo setup cursor [--project] [--install-instructions] [--dry-run] [--json]` | Cursor'ı bağla |
@@ -201,6 +205,9 @@ camera:
 squeeze:
   open_level: 0.80     # kalibrasyon iki seviyeyi de oturum boyunca geçersiz kılar
   closed_level: 0.45
+stats:
+  enabled: true        # oturum ve günlük toplamlar; gerekçe ve görüntü yok
+  path: null           # null = ~/.config/taprivo/stats.sqlite
 ```
 
 32145 portu doluysa HUD `MCP: Error` gösterir; `server.port` değerini değiştirip
@@ -215,6 +222,9 @@ değiştirmez.
 - Kamera kareleri bellekte işlenir; kaydedilmez, yüklenmez, MCP'ye açılmaz. El
   takibi modeli cihazda çalışır; mediapipe, kullanım kaydı içermeyen bir
   sürüme sabitlenmiştir.
+- İstatistikler yalnızca sayaç ve zaman damgası olarak
+  `~/.config/taprivo/stats.sqlite` dosyasında yerel tutulur — harcama gerekçesi
+  ve kamera verisi yoktur; `stats.enabled: false` ile kapatılır.
 - Telemetri yoktur. Tek ağ dinleyicisi yerel uç noktadır.
 - Loglar düşük hacimlidir; token'ı hiçbir zaman, harcama gerekçelerini ise tam metin olarak içermez.
 
@@ -240,7 +250,7 @@ Kamera (MediaPipe el landmark'ları, sıkma algılayıcı) / klavye simülatör�
 | Kamerayla sıkma algılama (iki el) | uygulandı (beta) |
 | Kalibrasyon | uygulandı (beta) |
 | Ritim / BPM | planlandı |
-| Kalıcı istatistikler (SQLite) | planlandı |
+| Kalıcı istatistikler (SQLite) | uygulandı (beta) |
 | Cursor | uygulandı (beta) |
 | Diğer ajanlar (Codex, …) | planlandı |
 

@@ -10,6 +10,10 @@ Keep a Changelog and the project uses Semantic Versioning.
 - Project `.cursor/mcp.json` entries reference `${env:TAPRIVO_TOKEN}` instead of the literal token.
 - `--json` output for the `setup` and `remove` commands of both agents, which now share one code path.
 - Global install instructions: `uv tool install` (or pipx) from the tagged repository, with upgrade and uninstall commands.
+- Persistent statistics: each session and its daily totals are stored in `~/.config/taprivo/stats.sqlite` (counters and timestamps only, no spend reasons and no camera data), with a new `stats` config section (`enabled`, `path`).
+- `taprivo stats --today` and `taprivo stats --history [--days N]` read that file directly, so they work while Taprivo is not running; both support `--json`.
+- Plain `taprivo stats` shows a `Today:` line with the day's sessions, taps and energy.
+- MCP `get_stats` gained an additive `today` object (`sessions`, `taps_total`, `generated`, `spent`, `active_seconds`), null when statistics are disabled or the day is empty.
 
 ## [0.1.0b2] - 2026-09-09
 
