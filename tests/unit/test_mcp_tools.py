@@ -17,6 +17,17 @@ def engine() -> EnergyEngine:
     return EnergyEngine(Config())
 
 
+class DrummingClock:
+    """A clock that walks 100 ms per tap: fast enough to build a combo."""
+
+    def __init__(self) -> None:
+        self._now = 0
+
+    def __call__(self) -> int:
+        self._now += 100
+        return self._now
+
+
 class SpacedClock:
     """A clock that walks a second per tap, clear of the cap and the combo window."""
 
@@ -124,6 +135,8 @@ async def test_get_stats_and_session(engine: EnergyEngine, simulator: Simulator)
     stats = await call(engine, "get_stats", {"scope": "session"})
     assert stats["taps_total"] == 2
     assert stats["taps_per_finger"]["index"] == 2
+    assert stats["taps_per_hand"] == {"left": 1, "right": 1}
+    assert stats["combo_multiplier"] == 1.0
     assert stats["spend_count"] == 1
     assert stats["last_spend"]["amount"] == 10
     assert stats["combo"] >= 1
@@ -139,3 +152,14 @@ async def test_get_session_reports_camera_stats(engine: EnergyEngine) -> None:
     session = await call(engine, "get_session")
     assert session["camera_fps"] == 21.4
     assert session["detection_ratio"] == 0.9
+
+
+async def test_get_stats_reports_the_combo_multiplier(engine: EnergyEngine) -> None:
+    sim = Simulator(engine, Config(), now_ms=DrummingClock())
+    sim.start()
+    for _ in range(12):
+        sim.tap(Hand.LEFT, Finger.INDEX)
+    stats = await call(engine, "get_stats", {"scope": "session"})
+    assert stats["combo"] == 12
+    assert stats["combo_multiplier"] == 1.5
+    assert stats["taps_per_hand"] == {"left": 12, "right": 0}

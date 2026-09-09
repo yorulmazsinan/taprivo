@@ -54,3 +54,16 @@ def test_stats_json(running_server: RunningServer) -> None:
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["taps_per_finger"]["pinky"] == 1
+    assert payload["taps_per_hand"] == {"left": 0, "right": 1}
+    assert payload["combo_multiplier"] == 1.0
+
+
+def test_stats_human_output_lists_hands_and_combo(running_server: RunningServer) -> None:
+    _write_port(running_server)
+    running_server.simulator.tap(Hand.LEFT, Finger.MIDDLE)
+    running_server.simulator.tap(Hand.RIGHT, Finger.MIDDLE)
+    result = runner.invoke(app, ["stats"])
+    assert result.exit_code == 0, result.output
+    assert "Hands:     left 1, right 1" in result.output
+    assert "taps/min" in result.output
+    assert "Combo:     x" in result.output and "×)" in result.output

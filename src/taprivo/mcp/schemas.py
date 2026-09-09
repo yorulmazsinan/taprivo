@@ -45,6 +45,12 @@ class StatsOut(BaseModel):
     taps_per_finger: dict[str, int]
     taps_per_minute: int
     combo: int
+    combo_multiplier: float = Field(
+        default=1.0, description="Energy multiplier the current combo has reached."
+    )
+    taps_per_hand: dict[str, int] = Field(
+        default_factory=dict, description="Taps counted per hand, e.g. {'left': 12, 'right': 9}."
+    )
     spend_count: int
     last_spend: LastSpendOut | None
     session_duration_seconds: int

@@ -253,7 +253,11 @@ def stats(json_output: bool = JSON_OPTION) -> None:
         f"{name.title()} {count}" for name, count in data["taps_per_finger"].items()
     )
     typer.echo(f"Taps:      {data['taps_total']} ({fingers})")
-    typer.echo(f"Rate:      {data['taps_per_minute']} taps/min, combo x{data['combo']}")
+    hands = data.get("taps_per_hand") or {}
+    typer.echo(f"Hands:     left {hands.get('left', 0)}, right {hands.get('right', 0)}")
+    typer.echo(f"Rate:      {data['taps_per_minute']} taps/min")
+    multiplier = float(data.get("combo_multiplier", 1.0))
+    typer.echo(f"Combo:     x{data['combo']} ({multiplier:.1f}×)")
     last = data["last_spend"]
     last_text = f"{last['amount']} for '{last['reason']}' at {last['at_utc']}" if last else "none"
     typer.echo(f"Spends:    {data['spend_count']} (last: {last_text})")
