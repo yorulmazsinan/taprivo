@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
+from pathlib import Path
 
 import httpx2
 import pytest
@@ -99,3 +102,72 @@ def test_parse_payload_ignores_booleans_and_blank_text() -> None:
         {"model": {"display_name": "  "}, "cost": {"total_cost_usd": True}, "version": None}
     )
     assert (status.model, status.cost_usd, status.version) == (None, None, None)
+
+
+# -- the installed script ---------------------------------------------------
+
+
+@pytest.mark.skipif(shutil.which("curl") is None, reason="curl is not installed")
+def test_the_installed_script_talks_to_the_running_server(
+    running_server: RunningServer, tmp_path: Path
+) -> None:
+    """Run the real POSIX sh script Taprivo installs against the live server."""
+    from taprivo.adapters.claude import ClaudeAdapter
+
+    adapter = ClaudeAdapter(running_server.config, home=tmp_path / "home")
+    adapter.write_statusline_script()
+    proc = subprocess.run(
+        ["sh", str(adapter.statusline_script_path)],
+        input=json.dumps(PAYLOAD),
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == f"⚡ {running_server.engine.snapshot().available} · x0 · 5h 42%"
+
+
+@pytest.mark.skipif(shutil.which("curl") is None, reason="curl is not installed")
+def test_the_script_chains_a_previous_status_line(
+    running_server: RunningServer, tmp_path: Path
+) -> None:
+    from taprivo.adapters.claude import ClaudeAdapter
+
+    adapter = ClaudeAdapter(running_server.config, home=tmp_path / "home")
+    adapter.write_statusline_script()
+    adapter.statusline_chain_path.write_text(
+        json.dumps({"type": "command", "command": "echo mine"}), encoding="utf-8"
+    )
+    proc = subprocess.run(
+        ["sh", str(adapter.statusline_script_path)],
+        input=json.dumps(PAYLOAD),
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip().startswith("mine · ⚡")
+
+
+@pytest.mark.skipif(shutil.which("curl") is None, reason="curl is not installed")
+def test_the_script_is_quiet_when_taprivo_is_not_running(
+    taprivo_home: Path, tmp_path: Path
+) -> None:
+    """The usual state of the world: Claude Code runs, Taprivo does not."""
+    from taprivo.adapters.claude import ClaudeAdapter
+    from taprivo.config import Config, ServerConfig
+
+    adapter = ClaudeAdapter(Config(server=ServerConfig(port=1)), home=tmp_path / "home")
+    adapter.write_statusline_script()
+    proc = subprocess.run(
+        ["sh", str(adapter.statusline_script_path)],
+        input=json.dumps({"model": {"display_name": "Opus"}}),
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert proc.stdout == ""

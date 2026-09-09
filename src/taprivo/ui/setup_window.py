@@ -49,6 +49,11 @@ CHECK_KIND: dict[str, StatusKind] = {"ok": "ok", "warn": "warn", "fail": "err"}
 CHECKING_TEXT = "Checking…"
 BUSY_TEXT = {"connect": "Connecting…", "disconnect": "Disconnecting…"}
 CLI_HINT = "Run `{path} --help` in Terminal for every command."
+STATUSLINE_LABEL = "Show Claude Code usage in the HUD (status line)"
+STATUSLINE_TOOLTIP = (
+    "Claude Code runs a short script that reports its model, context and usage limits to "
+    "Taprivo, and shows your energy in its own status line. Nothing leaves this machine."
+)
 
 ChecksRunner = Callable[..., list[Check]]
 
@@ -142,7 +147,15 @@ class SetupSignals(QObject):
 class AgentRow(QWidget):
     """One agent: its state, the two actions, and what the last run said."""
 
-    def __init__(self, title: str, palette: Palette, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        title: str,
+        palette: Palette,
+        parent: QWidget | None = None,
+        *,
+        option_label: str = "",
+        option_tooltip: str = "",
+    ) -> None:
         super().__init__(parent)
         self._palette = palette
         self.name_label = QLabel(title)
@@ -167,10 +180,19 @@ class AgentRow(QWidget):
         head.addWidget(self.connect_button)
         head.addWidget(self.disconnect_button)
 
+        # An agent-specific opt-in, honoured by Connect; None when the agent has none.
+        self.option_checkbox: QCheckBox | None = None
+        if option_label:
+            self.option_checkbox = QCheckBox(option_label)
+            self.option_checkbox.setChecked(True)
+            self.option_checkbox.setToolTip(option_tooltip)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
         layout.addLayout(head)
+        if self.option_checkbox is not None:
+            layout.addWidget(self.option_checkbox)
         layout.addWidget(self.log_label)
 
     def setStatus(self, status: AgentStatus) -> None:  # noqa: N802 (Qt naming)
@@ -223,7 +245,13 @@ class SetupWindow(QWidget):
         card, card_layout = _card("AGENTS", self._palette)
         self.agent_rows: dict[str, AgentRow] = {}
         for key in self._adapters:
-            row = AgentRow(AGENT_TITLES.get(key, key.title()), self._palette)
+            statusline = key == "claude"
+            row = AgentRow(
+                AGENT_TITLES.get(key, key.title()),
+                self._palette,
+                option_label=STATUSLINE_LABEL if statusline else "",
+                option_tooltip=STATUSLINE_TOOLTIP if statusline else "",
+            )
             row.connect_button.clicked.connect(lambda _=False, k=key: self.connect_agent(k))
             row.disconnect_button.clicked.connect(lambda _=False, k=key: self.disconnect_agent(k))
             self.agent_rows[key] = row
@@ -334,12 +362,17 @@ class SetupWindow(QWidget):
         self._set_busy(True)
         adapter = self._adapters[key]
         signals = self.signals
+        checkbox = row.option_checkbox
+        options = SetupOptions(
+            install_instructions=True,
+            statusline=checkbox is not None and checkbox.isChecked(),
+        )
 
         def work() -> None:
             ok = True
             try:
                 plan = (
-                    adapter.plan_setup(SetupOptions(install_instructions=True))
+                    adapter.plan_setup(options)
                     if action == "connect"
                     else adapter.plan_remove(SetupOptions())
                 )

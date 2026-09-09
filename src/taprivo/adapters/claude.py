@@ -10,6 +10,7 @@ import stat
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from taprivo import paths
 from taprivo.adapters.base import (
@@ -35,8 +36,65 @@ START_MARKER = "<!-- taprivo:start -->"
 END_MARKER = "<!-- taprivo:end -->"
 IMPORT_LINE = "@~/.claude/taprivo.md"
 SERVER_NAME = "taprivo"
+#: How often Claude Code re-runs the status line command, in seconds.
+STATUSLINE_REFRESH_SECONDS = 30
+
+#: POSIX sh, no bashisms: Claude Code runs the command through /bin/sh. It reads
+#: the session JSON from stdin, hands it to the local Taprivo server for the
+#: energy segment, replays it to whatever status line was configured before, and
+#: prints "previous · ours". The token is read from its file straight into the
+#: header and is never printed.
+STATUSLINE_SCRIPT = r"""#!/bin/sh
+# Taprivo status line for Claude Code.
+# Written by 'taprivo setup claude --statusline'; edits are overwritten.
+# Remove it with 'taprivo remove claude'.
+
+json=$(cat)
+
+# -f: an HTTP error prints nothing, so a rate limit or a stopped app
+# quietly leaves the status line to whatever came before.
+ours=$(printf '%s' "$json" | curl -sf -m 1 \
+  -H "Authorization: Bearer $(cat {token})" \
+  -H 'Content-Type: application/json' \
+  --data-binary @- {endpoint} 2>/dev/null)
+
+prev=''
+chain={chain}
+if [ -f "$chain" ]; then
+  # Pull the one string we need out of a small JSON file, without assuming jq.
+  previous=$(sed -nE 's/.*"command"[[:space:]]*:[[:space:]]*"(([^"\\]|\\.)*)".*/\1/p' \
+    "$chain" | head -n 1)
+  previous=$(printf '%s' "$previous" | sed -e 's/\\"/"/g' -e 's/\\\\/\\/g')
+  if [ -n "$previous" ]; then
+    prev=$(printf '%s' "$json" | sh -c "$previous" 2>/dev/null)
+  fi
+fi
+
+if [ -n "$prev" ] && [ -n "$ours" ]; then
+  printf '%s · %s\n' "$prev" "$ours"
+elif [ -n "$prev" ]; then
+  printf '%s\n' "$prev"
+elif [ -n "$ours" ]; then
+  printf '%s\n' "$ours"
+fi
+"""
 
 Runner = Callable[[list[str]], subprocess.CompletedProcess[str]]
+
+
+def sh_quote(value: str | Path) -> str:
+    """Single-quote a value for POSIX sh, so a space or a quote cannot break out."""
+    return "'" + str(value).replace("'", "'\\''") + "'"
+
+
+def statusline_script(endpoint: str) -> str:
+    """The status line script Taprivo installs, bound to this install's paths."""
+    return STATUSLINE_SCRIPT.format(
+        token=sh_quote(paths.token_path()),
+        endpoint=sh_quote(endpoint),
+        chain=sh_quote(paths.statusline_chain_path()),
+    )
+
 
 # Where a `claude` install ends up when the launching process has no login
 # shell PATH -- which is exactly the case for a double-clicked .app bundle.
@@ -129,8 +187,25 @@ class ClaudeAdapter:
         return self.claude_dir / "CLAUDE.md"
 
     @property
+    def settings_path(self) -> Path:
+        return self.claude_dir / "settings.json"
+
+    @property
+    def statusline_script_path(self) -> Path:
+        return paths.statusline_script_path()
+
+    @property
+    def statusline_chain_path(self) -> Path:
+        return paths.statusline_chain_path()
+
+    @property
     def endpoint(self) -> str:
         return self._config.endpoint_url
+
+    @property
+    def statusline_endpoint(self) -> str:
+        server = self._config.server
+        return f"http://{server.host}:{server.port}/statusline"
 
     # -- detection -----------------------------------------------------------
 
@@ -199,6 +274,26 @@ class ClaudeAdapter:
             plan.notes.append(
                 "Instruction import not installed; re-run with --install-instructions to add it to "
                 f"{self.claude_md_path}."
+            )
+        if options.statusline:
+            plan.actions.append(
+                SetupAction(
+                    "write_file",
+                    f"Write the status line script to {self.statusline_script_path} (mode 0700)",
+                    self._write_statusline,
+                )
+            )
+            plan.actions.append(
+                SetupAction(
+                    "merge_json",
+                    f"Point 'statusLine' at that script in {self.settings_path} (backup first)",
+                    self._install_statusline,
+                )
+            )
+        else:
+            plan.notes.append(
+                "Claude Code usage card not installed; re-run with --statusline to show the "
+                "model, context and rate limits in the HUD."
             )
         if options.project:
             target = options.project_dir / ".mcp.json"
@@ -281,6 +376,111 @@ class ClaudeAdapter:
             "Never commit the literal token."
         )
 
+    # -- status line ---------------------------------------------------------
+
+    def _read_settings(self) -> dict[str, Any]:
+        path = self.settings_path
+        if not path.exists():
+            return {}
+        try:
+            data = json.loads(path.read_text("utf-8"))
+        except json.JSONDecodeError as exc:
+            raise SetupError(f"{path} is not valid JSON: {exc}") from exc
+        if not isinstance(data, dict):
+            raise SetupError(f"{path} must contain a JSON object")
+        return data
+
+    def _write_settings(self, data: dict[str, Any]) -> None:
+        self.settings_path.parent.mkdir(parents=True, exist_ok=True)
+        self.settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+    def write_statusline_script(self) -> Path:
+        """Write the status line script and make it executable by its owner only."""
+        path = self.statusline_script_path
+        paths.ensure_home()
+        path.write_text(statusline_script(self.statusline_endpoint), encoding="utf-8")
+        os.chmod(path, 0o700)
+        return path
+
+    def _write_statusline(self) -> str:
+        paths.read_or_create_token()
+        return f"status line script written to {self.write_statusline_script()}"
+
+    def _ours(self, entry: object) -> bool:
+        """True when a `statusLine` setting already runs Taprivo's own script."""
+        return (
+            isinstance(entry, dict)
+            and isinstance(entry.get("command"), str)
+            and str(self.statusline_script_path) in entry["command"]
+        )
+
+    def _statusline_installed(self) -> bool:
+        """Whether the settings currently run our script. A settings file we
+        cannot read counts as "not ours": planning must never raise."""
+        try:
+            return self._ours(self._read_settings().get("statusLine"))
+        except SetupError:
+            return False
+
+    def _install_statusline(self) -> str:
+        settings = self._read_settings()
+        existing = settings.get("statusLine")
+        notes = []
+        if isinstance(existing, dict) and existing.get("command") and not self._ours(existing):
+            # Keep someone else's status line alive: the script chains it.
+            chain = {key: existing[key] for key in ("command", "type") if key in existing}
+            if "refreshInterval" in existing:
+                chain["refreshInterval"] = existing["refreshInterval"]
+            paths.ensure_home()
+            self.statusline_chain_path.write_text(
+                json.dumps(chain, indent=2) + "\n", encoding="utf-8"
+            )
+            notes.append(f"previous status line saved to {self.statusline_chain_path}")
+        merged = dict(settings)
+        merged["statusLine"] = {
+            "type": "command",
+            "command": str(self.statusline_script_path),
+            "refreshInterval": STATUSLINE_REFRESH_SECONDS,
+        }
+        if merged == settings:
+            return "status line already configured"
+        if self.settings_path.exists():
+            notes.insert(0, f"backup saved to {backup(self.settings_path)}")
+        self._write_settings(merged)
+        notes.append(f"status line configured in {self.settings_path}")
+        return "\n".join(notes)
+
+    def _remove_statusline(self) -> str:
+        """Put back whatever status line was there before, then forget ours."""
+        settings = self._read_settings()
+        if not self._ours(settings.get("statusLine")):
+            return "status line was not Taprivo's; left untouched"
+        restored: dict[str, Any] | None = None
+        if self.statusline_chain_path.exists():
+            try:
+                chained = json.loads(self.statusline_chain_path.read_text("utf-8"))
+            except json.JSONDecodeError:
+                chained = None
+            if isinstance(chained, dict) and chained.get("command"):
+                restored = chained
+        merged = dict(settings)
+        if restored is not None:
+            merged["statusLine"] = restored
+        else:
+            merged.pop("statusLine", None)
+        backup(self.settings_path)
+        self._write_settings(merged)
+        return (
+            "previous status line restored"
+            if restored is not None
+            else f"'statusLine' removed from {self.settings_path}"
+        )
+
+    def _delete_statusline_files(self) -> str:
+        self.statusline_script_path.unlink(missing_ok=True)
+        self.statusline_chain_path.unlink(missing_ok=True)
+        return "status line script deleted"
+
     # -- removal -------------------------------------------------------------
 
     def plan_remove(self, options: SetupOptions) -> SetupPlan:
@@ -305,6 +505,22 @@ class ClaudeAdapter:
             plan.actions.append(
                 SetupAction(
                     "delete_file", f"Delete {self.instructions_path}", self._delete_instructions
+                )
+            )
+        if self._statusline_installed():
+            plan.actions.append(
+                SetupAction(
+                    "edit_json",
+                    f"Restore the previous 'statusLine' in {self.settings_path} (backup first)",
+                    self._remove_statusline,
+                )
+            )
+        if self.statusline_script_path.exists() or self.statusline_chain_path.exists():
+            plan.actions.append(
+                SetupAction(
+                    "delete_file",
+                    f"Delete {self.statusline_script_path} and {self.statusline_chain_path}",
+                    self._delete_statusline_files,
                 )
             )
         if options.project:
@@ -442,6 +658,20 @@ class ClaudeAdapter:
                     "warn",
                     "import block not installed",
                     "run 'taprivo setup claude --install-instructions'",
+                )
+            )
+
+        if self._statusline_installed() and self.statusline_script_path.exists():
+            checks.append(
+                Check("claude_statusline", "ok", f"status line runs {self.statusline_script_path}")
+            )
+        else:
+            checks.append(
+                Check(
+                    "claude_statusline",
+                    "warn",
+                    "status line not installed",
+                    "run 'taprivo setup claude --statusline'",
                 )
             )
         return checks

@@ -172,11 +172,30 @@ def test_connect_applies_the_plan_and_reports_it(qtbot: QtBot) -> None:
     wait_for_status(qtbot, window, "claude", "Not connected")
     window.agent_rows["claude"].connect_button.click()
     wait_for_status(qtbot, window, "claude", "Connected")
-    assert adapters["claude"].setup_options == [SetupOptions(install_instructions=True)]
+    assert adapters["claude"].setup_options == [
+        SetupOptions(install_instructions=True, statusline=True)
+    ]
     log = window.agent_rows["claude"].log_label.text()
     assert "registered 'taprivo'" in log
     assert "a note" in log
     assert window.agent_rows["cursor"].status.text() == "Not connected"
+
+
+def test_the_status_line_checkbox_is_on_by_default_and_reaches_the_adapter(
+    qtbot: QtBot,
+) -> None:
+    window, adapters, _ = build_window(qtbot)
+    checkbox = window.agent_rows["claude"].option_checkbox
+    assert checkbox is not None
+    assert checkbox.isChecked()
+    assert "status line" in checkbox.text()
+    # Cursor has no status line of its own, so its row carries no checkbox.
+    assert window.agent_rows["cursor"].option_checkbox is None
+    checkbox.setChecked(False)
+    wait_for_status(qtbot, window, "claude", "Not connected")
+    window.agent_rows["claude"].connect_button.click()
+    wait_for_status(qtbot, window, "claude", "Connected")
+    assert adapters["claude"].setup_options[-1].statusline is False
 
 
 def test_disconnect_runs_the_removal_plan(qtbot: QtBot) -> None:
