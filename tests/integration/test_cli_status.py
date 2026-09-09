@@ -67,3 +67,45 @@ def test_stats_human_output_lists_hands_and_combo(running_server: RunningServer)
     assert "Hands:     left 1, right 1" in result.output
     assert "taps/min" in result.output
     assert "Combo:     x" in result.output and "×)" in result.output
+
+
+def test_stats_appends_todays_totals_when_the_store_has_a_row(
+    running_server: RunningServer,
+) -> None:
+    from datetime import UTC, datetime
+
+    from taprivo import paths
+    from taprivo.core.stats_sink import SessionRow
+    from taprivo.core.stats_store import StatsStore
+
+    _write_port(running_server)
+    store = StatsStore(paths.stats_path())
+    store.upsert_session(
+        SessionRow(
+            session_id="earlier",
+            started_utc=datetime.now(UTC).replace(microsecond=0).isoformat(),
+            ended_utc=None,
+            duration_s=600,
+            mode="simulator",
+            taps_total=75,
+            taps_left=40,
+            taps_right=35,
+            squeezes=0,
+            generated=750,
+            spent=200,
+            overflow=0,
+            max_combo=9,
+        )
+    )
+    store.close()
+
+    result = runner.invoke(app, ["stats"])
+    assert result.exit_code == 0, result.output
+    assert "Today:     1 sessions, 75 taps, +750 / -200" in result.output
+
+
+def test_stats_omits_today_without_a_store(running_server: RunningServer) -> None:
+    _write_port(running_server)
+    result = runner.invoke(app, ["stats"])
+    assert result.exit_code == 0, result.output
+    assert "Today:" not in result.output

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -8,6 +9,7 @@ from mcp.client import Client
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
 from taprivo.core.events import Finger, Hand
+from taprivo.core.stats_store import StatsStore
 from taprivo.mcp.server import TOOL_NAMES, build_server
 from taprivo.simulator import Simulator
 
@@ -163,3 +165,28 @@ async def test_get_stats_reports_the_combo_multiplier(engine: EnergyEngine) -> N
     assert stats["combo"] == 12
     assert stats["combo_multiplier"] == 1.5
     assert stats["taps_per_hand"] == {"left": 12, "right": 0}
+
+
+async def test_get_stats_today_is_null_without_a_statistics_store(engine: EnergyEngine) -> None:
+    stats = await call(engine, "get_stats", {"scope": "session"})
+    assert stats["today"] is None
+
+
+async def test_get_stats_reports_todays_totals_from_the_store(tmp_path: Path) -> None:
+    store = StatsStore(tmp_path / "stats.sqlite")
+    engine = EnergyEngine(Config(), sink=store, now_ms=SpacedClock())
+    sim = Simulator(engine, Config(), now_ms=SpacedClock())
+    sim.start()
+    sim.tap(Hand.LEFT, Finger.INDEX)
+    sim.tap(Hand.RIGHT, Finger.INDEX)
+    engine.heartbeat()
+
+    stats = await call(engine, "get_stats", {"scope": "session"})
+    assert stats["today"] == {
+        "sessions": 1,
+        "taps_total": 2,
+        "generated": 20,
+        "spent": 0,
+        "active_seconds": stats["today"]["active_seconds"],
+    }
+    store.close()
