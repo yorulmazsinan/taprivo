@@ -18,6 +18,7 @@ from typing import Literal
 from taprivo.config import Config
 from taprivo.core.combo import ComboTracker
 from taprivo.core.events import Hand, TapEvent, now_monotonic_ms
+from taprivo.core.rhythm import RhythmTracker
 from taprivo.core.session import Session
 from taprivo.core.state import AppSnapshot, McpStatus, Mode, TrackingStatus
 from taprivo.core.stats_sink import DailyRow, SessionRow, StatsSink
@@ -102,6 +103,14 @@ class EnergyEngine:
             self._config.combo.tiers,
             self._config.combo.energy_multiplier_enabled,
         )
+        self._rhythm = RhythmTracker(
+            window=self._config.rhythm.window,
+            tolerance=self._config.rhythm.tolerance,
+            bpm_min=self._config.rhythm.bpm_min,
+            bpm_max=self._config.rhythm.bpm_max,
+            enabled=self._config.rhythm.enabled,
+            steady_multiplier=self._config.rhythm.steady_multiplier,
+        )
         self._gross = 0
         self._overflow = 0
         self._spent = 0
@@ -121,7 +130,12 @@ class EnergyEngine:
             if event.session_id != self._session.session_id:
                 return TapResult(False, self._snapshot_locked())
             self._combo.record(event.timestamp_monotonic_ms)
-            per_tap = round(self._config.energy.energy_per_tap * self._combo.multiplier)
+            self._rhythm.record(event.timestamp_monotonic_ms)
+            per_tap = round(
+                self._config.energy.energy_per_tap
+                * self._combo.multiplier
+                * self._rhythm.multiplier
+            )
             room = max(self._config.energy.max_energy - self._available_locked(), 0)
             credited = min(per_tap, room)
             self._gross += per_tap
@@ -323,6 +337,9 @@ class EnergyEngine:
             energy_per_tap=self._config.energy.energy_per_tap,
             combo=self._combo.count,
             combo_multiplier=self._combo.multiplier,
+            bpm=round(self._rhythm.bpm, 1),
+            rhythm_steady=self._rhythm.steady,
+            rhythm_multiplier=self._rhythm.multiplier,
             taps_total=self._session.taps_total,
             taps_per_finger=dict(self._session.taps_per_finger),
             taps_per_hand=dict(self._session.taps_per_hand),

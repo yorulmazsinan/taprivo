@@ -9,6 +9,13 @@ combo:
   tiers:
     - {at: 10, multiplier: 1.5}
     - {at: 25, multiplier: 2.0}
+rhythm:
+  enabled: true
+  window: 8
+  tolerance: 0.15
+  bpm_min: 60
+  bpm_max: 240
+  steady_multiplier: 1.25
 server:
   host: 127.0.0.1
   port: 32145

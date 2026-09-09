@@ -49,6 +49,26 @@ class ComboConfig(_Frozen):
         return self
 
 
+class RhythmConfig(_Frozen):
+    enabled: bool = True
+    window: int = Field(default=8, ge=4, description="How many recent tap intervals to weigh.")
+    tolerance: float = Field(
+        default=0.15, gt=0, le=1, description="Allowed spread of the intervals, 0-1."
+    )
+    bpm_min: int = Field(default=60, ge=1)
+    bpm_max: int = Field(default=240, ge=1)
+    steady_multiplier: float = Field(default=1.25, ge=1.0)
+
+    @model_validator(mode="after")
+    def _bpm_range_ascends(self) -> RhythmConfig:
+        if self.bpm_min >= self.bpm_max:
+            raise ValueError(
+                "rhythm.bpm_min must be below rhythm.bpm_max "
+                f"(got bpm_min={self.bpm_min}, bpm_max={self.bpm_max})"
+            )
+        return self
+
+
 class ServerConfig(_Frozen):
     host: str = "127.0.0.1"
     port: int = Field(default=32145, ge=1, le=65535)
@@ -112,6 +132,7 @@ class Config(_Frozen):
     schema_version: int = 1
     energy: EnergyConfig = Field(default_factory=EnergyConfig)
     combo: ComboConfig = Field(default_factory=ComboConfig)
+    rhythm: RhythmConfig = Field(default_factory=RhythmConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     simulator: SimulatorConfig = Field(default_factory=SimulatorConfig)
     hud: HudConfig = Field(default_factory=HudConfig)
