@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>Taprivo</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1C1F27"/>
+      <stop offset="1" stop-color="#14161C"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="64" y="64" width="896" height="896" rx="200" ry="200" fill="url(#tile)"/>
+  <rect x="64" y="64" width="896" height="896" rx="200" ry="200" fill="none"
+        stroke="#2F3441" stroke-width="8"/>
+
+  <!-- Open hand: a rounded palm with four fingers and a thumb. -->
+  <g fill="none" stroke="#F6C844" stroke-width="58" stroke-linecap="round">
+    <path d="M398 566 L398 372"/>
+    <path d="M474 566 L474 318"/>
+    <path d="M550 566 L550 338"/>
+    <path d="M626 566 L626 414"/>
+    <path d="M390 646 L282 538"/>
+  </g>
+  <rect x="362" y="546" width="300" height="266" rx="104" ry="104" fill="#F6C844"/>
+
+  <!-- Dropped below 64 px, where the cut-out would close up into noise. -->
+  <g class="detail">
+    <path d="M534 612 L468 704 L508 704 L490 770 L558 678 L518 678 Z" fill="#14161C"/>
+  </g>
+</svg>

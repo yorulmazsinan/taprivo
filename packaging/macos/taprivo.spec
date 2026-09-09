@@ -28,8 +28,10 @@ datas = []
 binaries = []
 hiddenimports = []
 
-# --- taprivo itself: package data (model, default.yaml, agent-instructions.md) ---
-datas += collect_data_files("taprivo", includes=["**/*.task", "**/*.yaml", "**/*.md"])
+# --- taprivo itself: package data (model, default.yaml, agent-instructions.md, icon) ---
+datas += collect_data_files(
+    "taprivo", includes=["**/*.task", "**/*.yaml", "**/*.md", "**/*.png"]
+)
 hiddenimports += collect_submodules("taprivo")
 
 # --- mediapipe: .tflite/.binarypb graphs + the _framework_bindings extension ---
@@ -196,7 +198,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="Taprivo.app",
-    icon=None,
+    icon=os.path.join(SPECPATH, "Taprivo.icns"),
     bundle_identifier="com.sinanyorulmaz.taprivo",
     version=BUNDLE_VERSION,
     info_plist={
