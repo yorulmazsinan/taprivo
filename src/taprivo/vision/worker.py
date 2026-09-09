@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from taprivo.core.energy import EnergyEngine
 from taprivo.core.events import TapEvent, now_monotonic_ms
@@ -20,6 +20,7 @@ from taprivo.vision.tracker import HandTracker
 log = logging.getLogger(__name__)
 
 PreviewCallback = Callable[[Frame, tuple[HandFrame, ...], SqueezeState], None]
+TapsCallback = Callable[[Sequence[TapEvent]], None]
 TRACKING_WINDOW_MS = 1000
 TRACKING_MIN_RATIO = 0.5
 
@@ -83,6 +84,7 @@ class VisionWorker(threading.Thread):
         *,
         preview: PreviewCallback | None = None,
         preview_fps: int = 15,
+        taps: TapsCallback | None = None,
         now_ms: Callable[[], int] = now_monotonic_ms,
         stats_every_ms: int = 500,
     ) -> None:
@@ -92,6 +94,7 @@ class VisionWorker(threading.Thread):
         self._source_factory = source_factory
         self._tracker_factory = tracker_factory
         self._preview = preview
+        self._taps = taps
         self._preview_interval = 1000 // max(preview_fps, 1)
         self._now_ms = now_ms
         self._stats_every = stats_every_ms
@@ -214,6 +217,11 @@ class VisionWorker(threading.Thread):
     def _emit(self, events: list[TapEvent]) -> None:
         for event in events:
             self._engine.apply_tap(event)
+        if events and self._taps is not None:
+            try:
+                self._taps(events)
+            except Exception:
+                log.exception("taps callback failed")
 
     def _set_status(self, status: TrackingStatus) -> None:
         if status != self._status:
