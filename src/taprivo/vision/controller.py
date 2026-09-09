@@ -13,7 +13,7 @@ from taprivo.vision.camera import CameraError, CameraSource
 from taprivo.vision.frames import FrameStats
 from taprivo.vision.squeeze import Levels, SqueezeDetector, SqueezeParams
 from taprivo.vision.tracker import HandTracker, MediaPipeHandTracker, ModelError
-from taprivo.vision.worker import PreviewCallback, VisionWorker
+from taprivo.vision.worker import PreviewCallback, TapsCallback, VisionWorker
 
 SourceFactory = Callable[[int, Config, Callable[[], int]], CameraSource]
 TrackerFactory = Callable[[], HandTracker]
@@ -76,7 +76,12 @@ class VisionController:
 
     # -- lifecycle -----------------------------------------------------------
 
-    def start(self, device_index: int, preview: PreviewCallback | None = None) -> None:
+    def start(
+        self,
+        device_index: int,
+        preview: PreviewCallback | None = None,
+        taps: TapsCallback | None = None,
+    ) -> None:
         if self.running:
             return
         try:
@@ -92,6 +97,7 @@ class VisionController:
             self._tracker_factory,
             preview=preview,
             preview_fps=self._config.camera.preview_fps,
+            taps=taps,
             now_ms=self._now_ms,
         )
         worker.start()
