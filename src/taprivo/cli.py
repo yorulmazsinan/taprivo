@@ -103,7 +103,7 @@ def root(
 
 @app.command()
 def simulate() -> None:
-    """Open the HUD with the keyboard simulator running (no camera needed)."""
+    """Open the HUD with keyboard mode running (no camera needed)."""
     _launch(True)
 
 

@@ -5,6 +5,16 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Keyboard drumming with two hands: the left hand taps `1` `2` `3` `4` (pinky to index) and the right hand `7` `8` `9` `0` (index to pinky), with a chip per key in the HUD and per-hand counts in `get_stats` and `taprivo stats`.
+- A sliding one-second tap cap shared by both hands (`simulator.max_taps_per_second`, default 12); taps above it are ignored, and key auto-repeat never counts.
+- Combo multiplier tiers (`combo.tiers`, by default 1.5× from 10 consecutive taps and 2× from 25), shown on the HUD combo line and reported as `combo_multiplier` by `get_stats`.
+
+### Changed
+- The combo energy multiplier is on by default (`combo.energy_multiplier_enabled: true`); each tap is worth `energy_per_tap` times the multiplier the combo has reached.
+- Keys `1`–`5` no longer tap thumb…pinky of a single hand; the two-hand mapping replaces them, and keys `5` and `6` do nothing.
+- The HUD window is wider so that four key chips fit a row per hand.
+
 ## [0.1.0b1] - 2026-09-09
 
 Beta preview. Install from source with `uv sync`; there is no signed
