@@ -169,8 +169,12 @@ Energy. Think of it as a short circulation exercise between coding bursts.
 
 Closing the Camera window stops the camera; energy from squeezes stays in the HUD.
 
-The Camera window shows a Left/Right openness meter per hand with the
-calibrated open and closed levels as tick marks. Camera frames are processed in
+The Camera window draws the tracked hand over the live preview — 21 landmarks
+with per-finger fingertip colours, and an expanding ring from the palm each time
+a squeeze is counted — plus a strip with the frame rate, the detection ratio and
+the device name. It also shows a Left/Right openness meter per hand with the
+calibrated open and closed levels as tick marks and the current state beside it.
+Set `hud.reduced_motion: true` for a short static ring instead of the expanding one. Camera frames are processed in
 memory and shown only in the Camera window; they are never stored, logged or
 exposed through MCP. Calibration data can be exported as a CSV of per-hand
 features (no images, no raw landmarks) for tuning.
