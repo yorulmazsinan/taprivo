@@ -15,7 +15,8 @@ Status labels: implemented, in development, planned. Dates are not promises.
 - Rhythm/BPM, Overdrive: planned
 
 ## 0.3 — Stats
-- SQLite aggregates, daily stats, session summary, opt-in Git observation: planned
+- SQLite aggregates, daily stats, session summary: implemented (beta)
+- Opt-in Git observation: planned
 
 ## 0.4 — Adaptive calibration and a second agent adapter
 - Second agent adapter (Cursor): implemented (beta)

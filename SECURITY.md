@@ -30,6 +30,10 @@ During `taprivo setup cursor`, the bearer token is written into
 own user configuration; project files written with `--project` only reference
 `${env:TAPRIVO_TOKEN}` and never contain the token.
 
+Session statistics are written to a local SQLite file in the user's Taprivo
+directory and hold counters and timestamps only -- never spend reasons, camera
+data or file paths.
+
 Camera frames are processed in memory by the vision worker and rendered only
 in the Camera window; they are never written to disk, included in logs, or
 exposed over MCP. The hand-tracking dependency is pinned to a release without

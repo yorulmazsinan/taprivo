@@ -40,8 +40,10 @@ Energy is **not** a token balance, API credit or permission. Your existing
 task and agent permissions stay exactly as they are; running out of energy
 never blocks you, and the budget can be disabled at any time.
 
-The balance resets when Taprivo quits. Persistent history is planned for a
-later release.
+The balance resets when Taprivo quits, but the session is not forgotten:
+each session and its daily totals are written to a local SQLite file, so
+`taprivo stats --today` and `taprivo stats --history` still work with the app
+closed.
 
 ## Requirements
 
@@ -160,7 +162,9 @@ Keep the whole hand inside the frame; a hand partly out of view is ignored.
 | `taprivo camera list [--json]` | List camera devices |
 | `taprivo calibrate` | Open the Camera window for calibration |
 | `taprivo status [--json]` | Balance, tracking state, camera fps and endpoint of the running app |
-| `taprivo stats [--json]` | Session statistics |
+| `taprivo stats [--json]` | Session statistics of the running app, plus today's totals |
+| `taprivo stats --today [--json]` | Today's totals, read from the local statistics file |
+| `taprivo stats --history [--days N] [--json]` | Daily totals, newest first (default 30 days) |
 | `taprivo setup claude [--project] [--install-instructions] [--dry-run] [--json]` | Connect Claude Code |
 | `taprivo remove claude [--project] [--json]` | Disconnect Claude Code |
 | `taprivo setup cursor [--project] [--install-instructions] [--dry-run] [--json]` | Connect Cursor |
@@ -199,6 +203,9 @@ camera:
 squeeze:
   open_level: 0.80     # calibration overrides both levels for the session
   closed_level: 0.45
+stats:
+  enabled: true        # session and daily totals; no reasons, no frames
+  path: null           # null = ~/.config/taprivo/stats.sqlite
 ```
 
 If port 32145 is taken, the HUD shows `MCP: Error`; set `server.port` and run
@@ -212,6 +219,9 @@ If port 32145 is taken, the HUD shows `MCP: Error`; set `server.port` and run
 - Camera frames are processed in memory and are never stored, uploaded or
   exposed over MCP. The hand-tracking model runs on-device; mediapipe is
   pinned to a release without usage logging.
+- Statistics are stored locally in `~/.config/taprivo/stats.sqlite` as counters
+  and timestamps only — no spend reasons, no camera data; disable with
+  `stats.enabled: false`.
 - No telemetry. The only network listener is the local endpoint.
 - Logs stay low-volume and never contain the token or spend reasons in full.
 
@@ -237,7 +247,7 @@ Camera (MediaPipe hand landmarks, squeeze detector) / keyboard simulator
 | Camera squeeze detection (two hands) | implemented (beta) |
 | Calibration | implemented (beta) |
 | Rhythm / BPM | planned |
-| Persistent stats (SQLite) | planned |
+| Persistent stats (SQLite) | implemented (beta) |
 | Cursor | implemented (beta) |
 | Other agents (Codex, …) | planned |
 
