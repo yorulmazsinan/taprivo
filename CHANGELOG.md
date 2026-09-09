@@ -5,6 +5,10 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0b2] - 2026-09-09
+
+Beta preview with two-hand keyboard drumming.
+
 ### Added
 - Keyboard drumming with two hands: the left hand taps `1` `2` `3` `4` (pinky to index) and the right hand `7` `8` `9` `0` (index to pinky), with a chip per key in the HUD and per-hand counts in `get_stats` and `taprivo stats`.
 - A sliding one-second tap cap shared by both hands (`simulator.max_taps_per_second`, default 12); taps above it are ignored, and key auto-repeat never counts.
@@ -53,6 +57,7 @@ macOS package yet.
 - No camera support yet; the balance resets when the app quits.
 - Only Claude Code is tested as an MCP client.
 
-[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b1...HEAD
+[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b2...HEAD
+[0.1.0b2]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b2
 [0.1.0b1]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b1
 [0.1.0a1]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0a1
