@@ -97,6 +97,8 @@ Energy. Think of it as a short circulation exercise between coding bursts.
 4. Click **Calibrate** and follow the prompts: show your hand, open it wide,
    make a fist, then squeeze five times. Apply the result for this session.
 
+Closing the Camera window stops the camera; energy from squeezes stays in the HUD.
+
 The Camera window shows a Left/Right openness meter per hand with the
 calibrated open and closed levels as tick marks. Camera frames are processed in
 memory and shown only in the Camera window; they are never stored, logged or
@@ -123,7 +125,7 @@ Keep the whole hand inside the frame; a hand partly out of view is ignored.
 | `taprivo stats [--json]` | Session statistics |
 | `taprivo setup claude [--project] [--install-instructions] [--dry-run]` | Connect Claude Code |
 | `taprivo remove claude [--project]` | Disconnect Claude Code |
-| `taprivo doctor [--json] [--camera-probe]` | Diagnose the local setup; the probe opens the camera |
+| `taprivo doctor [--json] [--camera-probe]` | Diagnose the local setup; lists camera devices (briefly opens each index to detect a signal); the probe additionally checks permission and measures fps |
 
 Exit codes: 0 success, 1 operation failure, 2 invalid arguments or config.
 
