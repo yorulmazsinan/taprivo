@@ -8,9 +8,9 @@ from pytestqt.qtbot import QtBot
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
-from taprivo.core.events import Hand
+from taprivo.core.events import Finger, Hand, TapEvent, TapSource
 from taprivo.ui.camera_window import CameraWindow
-from taprivo.ui.vision_bridge import VisionSignals, make_preview_callback
+from taprivo.ui.vision_bridge import VisionSignals, make_preview_callback, make_taps_callback
 from taprivo.vision.calibration import CalibrationPrompt, CalibrationResult
 from taprivo.vision.camera import CameraDevice
 from taprivo.vision.controller import VisionController
@@ -243,7 +243,7 @@ def test_start_camera_is_noop_while_refreshing(qtbot: QtBot) -> None:
     assert w.start_button.isEnabled()
 
 
-def test_preview_packet_updates_pixmap_and_meters(window: tuple, qtbot: QtBot) -> None:
+def test_preview_packet_updates_the_view_and_meters(window: tuple, qtbot: QtBot) -> None:
     w, _controller, _engine = window
     callback = make_preview_callback(w.signals)
     frame = Frame(ts_ms=100, image=np.full((48, 64, 3), 120, dtype=np.uint8))
@@ -252,14 +252,15 @@ def test_preview_packet_updates_pixmap_and_meters(window: tuple, qtbot: QtBot) -
     detector.process(hands, 100)
     callback(frame, hands, detector.state())
 
-    def has_pixmap() -> bool:
-        pixmap = w.preview_label.pixmap()
-        return pixmap is not None and not pixmap.isNull()
-
-    qtbot.waitUntil(has_pixmap, timeout=2000)
+    qtbot.waitUntil(w.preview_label.has_frame, timeout=2000)
     qtbot.waitUntil(lambda: w.meters[Hand.RIGHT].value() > 0, timeout=2000)
     assert w.meters[Hand.LEFT].value() == 0
     assert w.state_labels[Hand.LEFT].text() == "Not seen"
+    assert [o.hand for o in w.preview_label.hands()] == [Hand.RIGHT]
+    # The strip reads from the same stats path the status line uses, and names
+    # the device the combo has selected.
+    assert "fps · hand" in w.preview_label.chrome_text()
+    assert w.preview_label.chrome_text().endswith("Camera 1")
 
 
 def test_calibration_flow_and_apply(window: tuple, qtbot: QtBot) -> None:
@@ -344,7 +345,7 @@ def test_reopen_restarts_the_tick_timer_and_calibration_still_works(qtbot: QtBot
     # test never calls show_result() itself.
     qtbot.waitUntil(lambda: w.apply_button.isEnabled(), timeout=3000)
     assert "Squeeze" in w.prompt_label.text() or "complete" in w.prompt_label.text().lower()
-    assert w.countdown_label.text() != "" or w.calibration_progress.value() > 0
+    assert w.countdown_label.text() != "" or w.step_pips.filled() > 0
 
 
 def test_worker_death_surfaces_error_and_resets_the_ui(qtbot: QtBot) -> None:
@@ -411,3 +412,127 @@ def test_export_button_enabled_only_with_a_calibration_result(window: tuple, qtb
 
     w.stop_camera()
     assert not w.export_button.isEnabled()  # disabled after stop
+
+
+class SteppedCalibrationSession:
+    """Walks the four calibration steps, one per prompt() call, then finishes."""
+
+    STEPS = ("visibility", "open", "fist", "squeeze", "done")
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def prompt(self, ts_ms: int | None = None) -> CalibrationPrompt:
+        step = self.STEPS[min(self.calls, len(self.STEPS) - 1)]
+        self.calls += 1
+        return CalibrationPrompt(step=step, text=f"step {step}", remaining_ms=0, progress=0.0)
+
+    @property
+    def finished(self) -> bool:
+        return self.calls > len(self.STEPS)
+
+    def result(self) -> CalibrationResult | None:
+        return None
+
+    def export_rows(self) -> list[dict[str, float | int | str]]:
+        return []
+
+
+def test_calibration_pips_advance_with_the_session(qtbot: QtBot) -> None:
+    controller = FakeController()
+    controller.running = True
+    session = SteppedCalibrationSession()
+    controller.begin_calibration = lambda: session  # type: ignore[assignment]
+    w = CameraWindow(controller, Config(), VisionSignals(), devices_fn=lambda: DEVICES)
+    qtbot.addWidget(w)
+    w.show()
+    assert w.step_pips.labels() == ("Visibility", "Open", "Fist", "Squeeze")
+
+    w.begin_calibration()
+    assert w.step_pips.filled() == 0
+    for expected in (1, 2, 3, 4, 4):
+        qtbot.waitUntil(lambda e=expected: w.step_pips.filled() == e, timeout=2000)
+    assert "step" in w.prompt_label.text()
+
+
+def test_result_badges_carry_the_status_word(window: tuple) -> None:
+    w, _controller, _engine = window
+    w.show_result(CalibrationResult(levels=Levels(0.9, 0.3), cycles=5, status="ok"))
+    assert w.result_status_label.text() == "ok"
+    assert "0.90" in w.result_levels_label.text()
+    assert w.result_cycles_label.text() == "cycles: 5"
+    ok_style = w.result_status_label.styleSheet()
+
+    w.show_result(CalibrationResult(levels=Levels(0.8, 0.45), cycles=1, status="uncalibrated"))
+    assert w.result_status_label.text() == "uncalibrated"  # colour never replaces the word
+    assert w.result_status_label.styleSheet() != ok_style
+    assert w.step_pips.filled() == 4
+
+
+def test_state_labels_are_coloured_and_always_spelled_out(window: tuple, qtbot: QtBot) -> None:
+    w, _controller, _engine = window
+    dim = w.state_labels[Hand.LEFT].styleSheet()
+    callback = make_preview_callback(w.signals)
+    frame = Frame(ts_ms=100, image=np.full((48, 64, 3), 120, dtype=np.uint8))
+    hands = hands_frame(100, {Hand.RIGHT: 0.95})
+    detector = SqueezeDetector(SqueezeParams(), lambda: "s")
+    detector.process(hands, 100)
+    callback(frame, hands, detector.state())
+    qtbot.waitUntil(lambda: w.state_labels[Hand.RIGHT].text() == "Open", timeout=2000)
+    assert w.state_labels[Hand.RIGHT].styleSheet() != dim
+    assert w.state_labels[Hand.LEFT].text() == "Not seen"
+
+
+def test_squeeze_signal_pulses_the_preview(window: tuple, qtbot: QtBot) -> None:
+    w, _controller, _engine = window
+    assert w.preview_label.active_pulses() == ()
+    w.signals.squeeze.emit(Hand.RIGHT)
+    qtbot.waitUntil(lambda: Hand.RIGHT in w.preview_label.active_pulses(), timeout=2000)
+    qtbot.waitUntil(lambda: w.preview_label.active_pulses() == (), timeout=3000)
+
+
+def test_reduced_motion_reaches_the_preview(qtbot: QtBot) -> None:
+    config = Config.model_validate({"hud": {"reduced_motion": True, "always_on_top": False}})
+    controller = FakeController()
+    w = CameraWindow(controller, config, VisionSignals(), devices_fn=lambda: DEVICES)
+    qtbot.addWidget(w)
+    w.show()
+    assert w.preview_label.is_reduced_motion()
+
+
+def test_taps_callback_emits_once_per_hand(qtbot: QtBot) -> None:
+    """A cycle produces five per-finger taps; the pulse must fire once."""
+    signals = VisionSignals()
+    seen: list[Hand] = []
+    signals.squeeze.connect(seen.append)
+    events = [
+        TapEvent(
+            event_id=f"e{i}",
+            session_id="s",
+            hand=hand,
+            hand_id=hand.value,
+            finger=finger,
+            timestamp_monotonic_ms=1,
+            displacement=0.5,
+            velocity=0.5,
+            confidence=0.9,
+            source=TapSource.CAMERA,
+        )
+        for i, (hand, finger) in enumerate(
+            [(h, f) for h in Hand for f in Finger]  # both hands, five fingers each
+        )
+    ]
+    make_taps_callback(signals)(events)
+    qtbot.waitUntil(lambda: len(seen) == 2, timeout=2000)
+    assert seen == [Hand.LEFT, Hand.RIGHT]
+
+
+def test_live_badge_follows_the_camera(window: tuple, qtbot: QtBot) -> None:
+    w, _controller, _engine = window
+    assert not w.preview_label.is_live()
+    w.start_camera()
+    qtbot.waitUntil(lambda: w.preview_label.is_live(), timeout=3000)
+    w.stop_camera()
+    assert not w.preview_label.is_live()
+    assert w.preview_label.text() == "Camera off"
+    assert w.preview_label.chrome_text() == ""
