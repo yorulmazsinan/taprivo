@@ -84,6 +84,13 @@ PHASE_TEXT = {
     "closed": "Closed",
 }
 IDLE_HINT_TEXT = "Press Calibrate to tune the open/closed levels for your hand."
+# Built-in first, iPhone Continuity Cameras last: the list should lead with the
+# camera that is actually attached to this Mac.
+KIND_ORDER = {"builtin": 0, "external": 1, "unknown": 2, "continuity": 3}
+
+
+def sort_devices(devices: list[CameraDevice]) -> list[CameraDevice]:
+    return sorted(devices, key=lambda d: (KIND_ORDER.get(d.kind, 2), d.index))
 
 
 class CameraWindow(QWidget):
@@ -298,14 +305,16 @@ class CameraWindow(QWidget):
     def on_devices(self, devices: object) -> None:
         if not isinstance(devices, list):
             return
-        self._devices = devices
+        # The combo is reordered for display, but the default is chosen from the
+        # capture-index order so that prefer_builtin, not the sort, decides it.
+        self._devices = sort_devices(devices)
         self.device_combo.setEnabled(True)
         self.device_combo.clear()
         for device in self._devices:
             self.device_combo.addItem(device.label, device.index)
         preferred = self._config.camera.device_index
         chosen = next((d for d in self._devices if d.index == preferred), None) or default_device(
-            self._devices
+            devices, prefer_builtin=self._config.camera.prefer_builtin
         )
         if chosen is not None:
             self.device_combo.setCurrentIndex(self._devices.index(chosen))

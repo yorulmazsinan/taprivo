@@ -44,6 +44,14 @@ datas += cv_datas
 binaries += cv_binaries
 hiddenimports += cv_hidden
 
+# --- PyObjC: AVFoundation gives the camera devices their real names ---
+# Imported lazily by taprivo.vision.devices, so PyInstaller's analysis misses it.
+for pkg in ("objc", "AVFoundation"):
+    try:
+        hiddenimports += collect_submodules(pkg)
+    except Exception:  # not installed (a non-macOS checkout); names degrade gracefully
+        pass
+
 # --- server stack: hooks miss the dynamically imported bits ---
 for pkg in ("mcp", "uvicorn", "starlette", "anyio", "sse_starlette"):
     hiddenimports += collect_submodules(pkg)

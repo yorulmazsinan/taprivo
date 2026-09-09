@@ -123,7 +123,7 @@ list_devices_fn = list_devices
 
 def camera_probe_fn(config: Config) -> tuple[bool, str]:
     devices = list_devices_fn()
-    device = default_device(devices)
+    device = default_device(devices, prefer_builtin=config.camera.prefer_builtin)
     if device is None:
         return False, "no camera device"
     source = CameraSource(device.index, width=config.camera.width, height=config.camera.height)
@@ -145,7 +145,7 @@ def fps_probe_fn(config: Config) -> tuple[float, str]:
     tracker, returning (processed fps, ""), or (-1.0, error text) if anything in
     the probe -- opening the camera, loading mediapipe, reading a frame -- fails.
     Never raises: a probe failure must surface as a failed check, not a crash."""
-    device = default_device(list_devices_fn())
+    device = default_device(list_devices_fn(), prefer_builtin=config.camera.prefer_builtin)
     if device is None:
         return 0.0, "no camera device"
     source = CameraSource(device.index, width=config.camera.width, height=config.camera.height)
@@ -172,7 +172,7 @@ def fps_probe_fn(config: Config) -> tuple[float, str]:
 
 @camera_app.command("list")
 def camera_list(json_output: bool = JSON_OPTION) -> None:
-    """List camera devices with resolution and signal state."""
+    """List camera devices with name, kind, resolution and signal state."""
     devices = list_devices_fn()
     if json_output:
         emit_json({"ok": bool(devices), "devices": [asdict(d) for d in devices]})
@@ -181,10 +181,15 @@ def camera_list(json_output: bool = JSON_OPTION) -> None:
         return
     if not devices:
         fail(f"No camera device found. Check {CAMERA_SETTINGS_HINT}.", False)
-    default = default_device(devices)
+    config = load_config_or_exit(False)
+    default = default_device(devices, prefer_builtin=config.camera.prefer_builtin)
     for d in devices:
         marker = " (default)" if default is not None and d.index == default.index else ""
-        typer.echo(f"[{d.index}] {d.label}{marker}")
+        state = "signal" if d.has_signal else "no signal"
+        if not d.probed:
+            state = "not probed"
+        name = d.name or f"Camera {d.index}"
+        typer.echo(f"[{d.index}] {name} — {d.kind}, {d.width}x{d.height}, {state}{marker}")
 
 
 @app.command()
@@ -649,11 +654,15 @@ def _camera_checks(config: Config, probe: bool) -> list[Check]:
         )
         return checks
     signal = [d for d in devices if d.has_signal]
+    builtin = next((d for d in devices if d.kind == "builtin"), None)
+    detail = f"{len(devices)} device(s), {len(signal)} with signal"
+    if builtin is not None:
+        detail += "; built-in camera: " + (builtin.name or f"camera {builtin.index}")
     checks.append(
         Check(
             "camera_devices",
             "ok" if signal else "warn",
-            f"{len(devices)} device(s), {len(signal)} with signal",
+            detail,
             "" if signal else "select a camera that shows an image in the Camera window",
         )
     )
