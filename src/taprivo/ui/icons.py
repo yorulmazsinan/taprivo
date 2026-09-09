@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from importlib import resources
 
+from PySide6.QtCore import QByteArray
 from PySide6.QtGui import QIcon, QPixmap
 
 log = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ def app_icon() -> QIcon:
         log.warning("application icon %s is missing", ICON_RESOURCE)
         return QIcon()
     pixmap = QPixmap()
-    if not pixmap.loadFromData(data, b"PNG"):
+    if not pixmap.loadFromData(QByteArray(data)):
         log.warning("application icon %s could not be decoded", ICON_RESOURCE)
         return QIcon()
     return QIcon(pixmap)

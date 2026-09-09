@@ -32,9 +32,8 @@ def build_hud(qtbot: QtBot, config: Config | None = None) -> HudBundle:
     window.show()
     # The HUD coalesces renders through a single-shot timer; wait for the first paint
     # so tests observe a populated window regardless of platform event-loop timing.
-    qtbot.waitUntil(
-        lambda: window.energy_label.text() == f"0 / {cfg.energy.max_energy}", timeout=2000
-    )
+    # The status badges are empty until that render, unlike the energy number.
+    qtbot.waitUntil(lambda: window.tracking_label.text() != "", timeout=2000)
     return HudBundle(window, engine, simulator, cfg)
 
 
