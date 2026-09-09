@@ -53,8 +53,14 @@ json=$(cat)
 
 # -f: an HTTP error prints nothing, so a rate limit or a stopped app
 # quietly leaves the status line to whatever came before.
+# The bearer header goes through a private temp file (curl -H @file) so the
+# token never appears in the process arguments visible to 'ps'.
+umask 077
+hdr=$(mktemp "${{TMPDIR:-/tmp}}/taprivo-hdr.XXXXXX" 2>/dev/null) || exit 0
+trap 'rm -f "$hdr"' EXIT
+printf 'Authorization: Bearer %s\n' "$(cat {token})" > "$hdr"
 ours=$(printf '%s' "$json" | curl -sf -m 1 \
-  -H "Authorization: Bearer $(cat {token})" \
+  -H "@$hdr" \
   -H 'Content-Type: application/json' \
   --data-binary @- {endpoint} 2>/dev/null)
 
