@@ -98,6 +98,10 @@ class HudConfig(_Frozen):
 
 class CameraConfig(_Frozen):
     device_index: int | None = Field(default=None, ge=0)
+    prefer_builtin: bool = Field(
+        default=True,
+        description="Pick the built-in camera by default, never an iPhone Continuity Camera.",
+    )
     width: int = Field(default=640, ge=160, le=4096)
     height: int = Field(default=480, ge=120, le=4096)
     preview_fps: int = Field(default=15, ge=1, le=60)

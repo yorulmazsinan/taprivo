@@ -13,8 +13,19 @@ from taprivo.vision.camera import CameraDevice, CameraError
 
 runner = CliRunner()
 DEVICES = [
-    CameraDevice(0, "Camera 0 (1920x1080) — no signal", 1920, 1080, False),
-    CameraDevice(1, "Camera 1 (640x480)", 640, 480, True),
+    CameraDevice(
+        0,
+        "Sinan's iPhone (iPhone camera; select to use)",
+        0,
+        0,
+        False,
+        "Sinan's iPhone",
+        "continuity",
+        False,
+    ),
+    CameraDevice(
+        1, "FaceTime HD Kamera (640x480)", 640, 480, True, "FaceTime HD Kamera", "builtin", True
+    ),
 ]
 
 
@@ -34,19 +45,25 @@ def test_camera_list_json(taprivo_home: Path, monkeypatch: pytest.MonkeyPatch) -
     assert payload["schema_version"] == 1
     assert payload["devices"][1] == {
         "index": 1,
-        "label": "Camera 1 (640x480)",
+        "label": "FaceTime HD Kamera (640x480)",
         "width": 640,
         "height": 480,
         "has_signal": True,
+        "name": "FaceTime HD Kamera",
+        "kind": "builtin",
+        "probed": True,
     }
+    # The Continuity Camera is listed without ever having been opened.
+    assert payload["devices"][0]["kind"] == "continuity"
+    assert payload["devices"][0]["probed"] is False
 
 
 def test_camera_list_human_and_empty(taprivo_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "list_devices_fn", lambda: DEVICES)
     result = runner.invoke(cli.app, ["camera", "list"])
     assert result.exit_code == 0
-    assert "[0] Camera 0 (1920x1080) — no signal" in result.output
-    assert "[1] Camera 1 (640x480) (default)" in result.output
+    assert "[0] Sinan's iPhone — continuity, 0x0, not probed" in result.output
+    assert "[1] FaceTime HD Kamera — builtin, 640x480, signal (default)" in result.output
     assert result.output.count("(default)") == 1
     monkeypatch.setattr(cli, "list_devices_fn", lambda: [])
     empty = runner.invoke(cli.app, ["camera", "list"])
@@ -100,7 +117,9 @@ def test_doctor_camera_checks(taprivo_home: Path, monkeypatch: pytest.MonkeyPatc
     statuses = {c["name"]: c["status"] for c in payload["checks"]}
     assert statuses["model"] == "ok"
     assert statuses["mediapipe"] in ("ok", "fail")
+    checks = {c["name"]: c for c in payload["checks"]}
     assert statuses["camera_devices"] == "ok"
+    assert "built-in camera: FaceTime HD Kamera" in checks["camera_devices"]["detail"]
     assert statuses["camera_permission"] == "ok"
     assert statuses["camera_fps"] == "ok"
 
@@ -189,7 +208,7 @@ def test_doctor_camera_probe_no_frame_hints_at_closed_lid(
     monkeypatch.setattr(
         cli,
         "camera_probe_fn",
-        lambda config: (False, "camera 0 opened but delivered no frame within 3 s"),
+        lambda config: (False, "camera 1 opened but delivered no frame within 3 s"),
     )
     paths.user_config_path().parent.mkdir(parents=True, exist_ok=True)
     paths.user_config_path().write_text("server:\n  port: 1\n")
@@ -198,7 +217,7 @@ def test_doctor_camera_probe_no_frame_hints_at_closed_lid(
     checks = {c["name"]: c for c in payload["checks"]}
     assert checks["camera_permission"]["status"] == "fail"
     assert checks["camera_permission"]["detail"] == (
-        "camera 0 opened but delivered no frame within 3 s"
+        "camera 1 opened but delivered no frame within 3 s"
     )
     assert "lid" in checks["camera_permission"]["hint"]
 

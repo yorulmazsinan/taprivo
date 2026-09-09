@@ -23,6 +23,7 @@ dependencies = [
   "httpx2>=2.12,<3",
   "numpy>=2,<3",
   "pydantic>=2.7,<3",
+  "pyobjc-framework-AVFoundation>=10; sys_platform == 'darwin'",
   "pyside6>=6.8,<7",
   "typer>=0.15,<1",
   "uvicorn>=0.30,<1",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -10,7 +11,10 @@ import cv2
 import numpy as np
 
 from taprivo.core.events import now_monotonic_ms
+from taprivo.vision.devices import DeviceInfo, enumerate_devices
 from taprivo.vision.frames import Frame
+
+log = logging.getLogger(__name__)
 
 DARK_MEAN = 5.0
 MAX_PROBE_INDEX = 4
@@ -19,6 +23,8 @@ STALE_MS = 2000
 PROBE_FRAMES = 5
 
 CaptureFactory = Callable[[int], Any]
+EnumerateFn = Callable[[], list[DeviceInfo]]
+CONTINUITY_HINT = "iPhone camera; select to use"
 
 
 class CameraError(Exception):
@@ -32,6 +38,9 @@ class CameraDevice:
     width: int
     height: int
     has_signal: bool
+    name: str = ""
+    kind: str = "unknown"
+    probed: bool = True
 
 
 def default_capture_factory(index: int) -> Any:
@@ -42,38 +51,104 @@ def frame_is_dark(image: np.ndarray) -> bool:
     return float(image.mean()) < DARK_MEAN
 
 
+def _label(name: str, width: int, height: int, signal: bool, probed: bool) -> str:
+    if not probed:
+        return f"{name} ({CONTINUITY_HINT})"
+    return f"{name} ({width}x{height})" + ("" if signal else " — no signal")
+
+
+def _probe(capture: Any) -> tuple[int, int, bool]:
+    width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+    height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+    signal = False
+    for _ in range(PROBE_FRAMES):
+        ok, image = capture.read()
+        if ok and image is not None:
+            if width == 0 or height == 0:
+                height, width = image.shape[:2]
+            if not frame_is_dark(image):
+                signal = True
+                break
+    return width, height, signal
+
+
 def list_devices(
-    factory: CaptureFactory = default_capture_factory, max_index: int = MAX_PROBE_INDEX
+    factory: CaptureFactory = default_capture_factory,
+    max_index: int = MAX_PROBE_INDEX,
+    enumerate_fn: EnumerateFn = enumerate_devices,
 ) -> list[CameraDevice]:
-    devices: list[CameraDevice] = []
+    """Every capture index that opens, with a real device name where macOS
+    offers one.
+
+    A device AVFoundation reports as a Continuity Camera is listed but never
+    opened: opening one wakes the iPhone. Such a device comes back with
+    `probed=False`, `has_signal=False` and a label that says to select it.
+    """
+    try:
+        infos = enumerate_fn()
+    except Exception:  # names are a nicety; a failure must not hide the cameras
+        log.exception("camera device enumeration failed")
+        infos = []
+    by_index = {info.index: info for info in infos}
+    found: list[tuple[int, int, int, bool, bool]] = []  # index, w, h, signal, probed
     for index in range(max_index + 1):
+        if (info := by_index.get(index)) is not None and info.kind == "continuity":
+            found.append((index, 0, 0, False, False))
+            continue
         capture = factory(index)
         try:
             if not capture.isOpened():
                 continue
-            width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
-            height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
-            signal = False
-            for _ in range(PROBE_FRAMES):
-                ok, image = capture.read()
-                if ok and image is not None:
-                    if width == 0 or height == 0:
-                        height, width = image.shape[:2]
-                    if not frame_is_dark(image):
-                        signal = True
-                        break
-            label = f"Camera {index} ({width}x{height})" + ("" if signal else " — no signal")
-            devices.append(CameraDevice(index, label, width, height, signal))
+            width, height, signal = _probe(capture)
+            found.append((index, width, height, signal, True))
         finally:
             capture.release()
+    if len(infos) != len(found):
+        # OpenCV and AVFoundation disagree about how many cameras exist, so the
+        # index -> name mapping cannot be trusted: fall back to index labels.
+        by_index = {}
+    devices: list[CameraDevice] = []
+    for index, width, height, signal, probed in found:
+        info = by_index.get(index)
+        name = info.name if info is not None else f"Camera {index}"
+        kind = info.kind if info is not None else "unknown"
+        devices.append(
+            CameraDevice(
+                index=index,
+                label=_label(name, width, height, signal, probed),
+                width=width,
+                height=height,
+                has_signal=signal,
+                name=name,
+                kind=kind,
+                probed=probed,
+            )
+        )
     return devices
 
 
-def default_device(devices: list[CameraDevice]) -> CameraDevice | None:
+def default_device(
+    devices: list[CameraDevice], *, prefer_builtin: bool = True
+) -> CameraDevice | None:
+    """The device to select when the user has not picked one.
+
+    With `prefer_builtin` (the default) the built-in camera wins even when
+    another device also has a signal, so a nearby iPhone cannot take over.
+    """
+    if not devices:
+        return None
+    if prefer_builtin:
+        for device in devices:
+            if device.kind == "builtin" and device.has_signal:
+                return device
     for device in devices:
-        if device.has_signal:
+        if device.probed and device.has_signal:
             return device
-    return devices[0] if devices else None
+    if prefer_builtin:
+        for device in devices:
+            if device.kind == "builtin":
+                return device
+    return devices[0]
 
 
 class CameraSource:

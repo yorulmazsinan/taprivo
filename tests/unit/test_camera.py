@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 
@@ -13,6 +15,24 @@ from taprivo.vision.camera import (
     frame_is_dark,
     list_devices,
 )
+from taprivo.vision.devices import DeviceInfo
+
+
+def info(index: int, name: str, kind: str) -> DeviceInfo:
+    return DeviceInfo(index, name, "model", f"unique-{index}", kind)  # type: ignore[arg-type]
+
+
+def tracked_factory(
+    captures: dict[int, FakeCapture],
+) -> tuple[Callable[[int], FakeCapture], list[int]]:
+    """A capture factory that records every index it is asked to open."""
+    opened: list[int] = []
+
+    def factory(index: int) -> FakeCapture:
+        opened.append(index)
+        return captures[index]
+
+    return factory, opened
 
 
 class FakeCapture:
@@ -27,8 +47,10 @@ class FakeCapture:
         self._size = size
         self.props: dict[int, float] = {}
         self.released = False
+        self.opened_checked = False
 
     def isOpened(self) -> bool:  # noqa: N802 (OpenCV API)
+        self.opened_checked = True
         return self._opened
 
     def set(self, prop: int, value: float) -> bool:
@@ -74,18 +96,107 @@ def test_list_devices_probes_signal_and_labels() -> None:
         1: FakeCapture(bright(5)),
         2: FakeCapture([], opened=False),
     }
-    devices = list_devices(lambda i: captures[i], max_index=2)
+    devices = list_devices(lambda i: captures[i], max_index=2, enumerate_fn=lambda: [])
     assert [d.index for d in devices] == [0, 1]
     assert devices[0].has_signal is False and "no signal" in devices[0].label
     assert devices[1].has_signal is True and devices[1].label == "Camera 1 (640x480)"
+    assert [d.kind for d in devices] == ["unknown", "unknown"]
+    assert all(d.probed for d in devices)
     assert all(c.released for c in captures.values())
     assert default_device(devices) == devices[1]
     assert default_device([]) is None
 
 
 def test_list_devices_falls_back_to_frame_shape() -> None:
-    devices = list_devices(lambda i: FakeCapture(bright(5), size=(0, 0)), max_index=0)
-    assert devices == [CameraDevice(0, "Camera 0 (640x480)", 640, 480, True)]
+    devices = list_devices(
+        lambda i: FakeCapture(bright(5), size=(0, 0)), max_index=0, enumerate_fn=lambda: []
+    )
+    assert devices == [
+        CameraDevice(0, "Camera 0 (640x480)", 640, 480, True, "Camera 0", "unknown", True)
+    ]
+
+
+def test_list_devices_merges_avfoundation_names_by_index() -> None:
+    captures = {0: FakeCapture(bright(5)), 1: FakeCapture(bright(5), size=(1280, 720))}
+    factory, opened = tracked_factory(captures)
+    devices = list_devices(
+        factory,
+        max_index=1,
+        enumerate_fn=lambda: [
+            info(0, "FaceTime HD Kamera", "builtin"),
+            info(1, "Logi Webcam", "external"),
+        ],
+    )
+    assert opened == [0, 1]
+    assert [(d.name, d.kind, d.label) for d in devices] == [
+        ("FaceTime HD Kamera", "builtin", "FaceTime HD Kamera (640x480)"),
+        ("Logi Webcam", "external", "Logi Webcam (1280x720)"),
+    ]
+
+
+def test_list_devices_never_opens_a_continuity_camera() -> None:
+    """Opening a Continuity Camera wakes the iPhone -- the whole point of the
+    AVFoundation lookup is to list one without touching it."""
+    captures = {0: FakeCapture(bright(5)), 1: FakeCapture(bright(5))}
+    factory, opened = tracked_factory(captures)
+    devices = list_devices(
+        factory,
+        max_index=1,
+        enumerate_fn=lambda: [
+            info(0, "Sinan's iPhone", "continuity"),
+            info(1, "FaceTime HD Kamera", "builtin"),
+        ],
+    )
+    assert opened == [1]
+    assert captures[0].released is False and not captures[0].opened_checked
+    phone, facetime = devices
+    assert phone.probed is False and phone.has_signal is False
+    assert phone.label == "Sinan's iPhone (iPhone camera; select to use)"
+    assert (phone.width, phone.height) == (0, 0)
+    assert facetime.probed is True and facetime.has_signal is True
+    assert default_device(devices) == facetime
+
+
+def test_list_devices_ignores_names_when_the_counts_disagree() -> None:
+    """OpenCV opened a camera AVFoundation never mentioned: the index -> name
+    mapping is then guesswork, so every name is dropped."""
+    captures = {0: FakeCapture(bright(5)), 1: FakeCapture(bright(5))}
+    devices = list_devices(
+        lambda i: captures[i],
+        max_index=1,
+        enumerate_fn=lambda: [info(0, "FaceTime HD Kamera", "builtin")],
+    )
+    assert [(d.name, d.kind) for d in devices] == [
+        ("Camera 0", "unknown"),
+        ("Camera 1", "unknown"),
+    ]
+
+
+def test_list_devices_survives_a_failing_enumeration() -> None:
+    def explode() -> list[DeviceInfo]:
+        raise RuntimeError("AVFoundation went away")
+
+    devices = list_devices(lambda i: FakeCapture(bright(5)), max_index=0, enumerate_fn=explode)
+    assert [d.label for d in devices] == ["Camera 0 (640x480)"]
+
+
+def test_default_device_prefers_the_builtin_over_another_live_camera() -> None:
+    phone = CameraDevice(0, "iPhone", 0, 0, False, "iPhone", "continuity", False)
+    webcam = CameraDevice(1, "Webcam", 640, 480, True, "Webcam", "external", True)
+    builtin = CameraDevice(2, "FaceTime", 1280, 720, True, "FaceTime", "builtin", True)
+    devices = [phone, webcam, builtin]
+    assert default_device(devices) is builtin
+    assert default_device(devices, prefer_builtin=False) is webcam
+
+
+def test_default_device_falls_back_through_the_policy() -> None:
+    phone = CameraDevice(0, "iPhone", 0, 0, False, "iPhone", "continuity", False)
+    dark_builtin = CameraDevice(1, "FaceTime", 1280, 720, False, "FaceTime", "builtin", True)
+    # Nothing has a signal (a closed MacBook lid): the built-in still wins over
+    # the unprobed iPhone, and it must never be the unprobed device by default.
+    assert default_device([phone, dark_builtin]) is dark_builtin
+    assert default_device([phone, dark_builtin], prefer_builtin=False) is phone
+    assert default_device([phone]) is phone
 
 
 def test_open_failure_raises_camera_error() -> None:

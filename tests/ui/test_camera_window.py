@@ -22,6 +22,22 @@ DEVICES = [
     CameraDevice(0, "Camera 0 (1920x1080) — no signal", 1920, 1080, False),
     CameraDevice(1, "Camera 1 (640x480)", 640, 480, True),
 ]
+NAMED_DEVICES = [
+    CameraDevice(
+        0,
+        "Sinan's iPhone (iPhone camera; select to use)",
+        0,
+        0,
+        False,
+        "Sinan's iPhone",
+        "continuity",
+        False,
+    ),
+    CameraDevice(1, "Logi Webcam (640x480)", 640, 480, True, "Logi Webcam", "external", True),
+    CameraDevice(
+        2, "FaceTime HD Kamera (1280x720)", 1280, 720, True, "FaceTime HD Kamera", "builtin", True
+    ),
+]
 
 
 class FakeCalibrationSession:
@@ -119,6 +135,40 @@ def test_devices_populated_and_default_selected(window: tuple) -> None:
     assert w.device_combo.count() == 2
     assert w.selected_device_index() == 1  # first device with signal
     assert "no signal" in w.device_combo.itemText(0)
+
+
+def _named_window(qtbot: QtBot, config: Config) -> CameraWindow:
+    controller = VisionController(
+        EnergyEngine(config),
+        config,
+        source_factory=lambda index, cfg, now_ms: IdleSource(index=index),
+        tracker_factory=NoHandTracker,
+    )
+    w = CameraWindow(controller, config, VisionSignals(), devices_fn=lambda: NAMED_DEVICES)
+    qtbot.addWidget(w)
+    w.show()
+    qtbot.waitUntil(lambda: w.device_combo.count() == len(NAMED_DEVICES), timeout=3000)
+    return w
+
+
+def test_builtin_leads_the_list_and_is_selected(qtbot: QtBot) -> None:
+    """Built-in first, external next, the iPhone last -- and the built-in is
+    picked even though the webcam earlier in the raw list also has a signal."""
+    w = _named_window(qtbot, Config())
+    texts = [w.device_combo.itemText(i) for i in range(w.device_combo.count())]
+    assert [t.split(" (")[0] for t in texts] == [
+        "FaceTime HD Kamera",
+        "Logi Webcam",
+        "Sinan's iPhone",
+    ]
+    assert "iPhone camera; select to use" in texts[2]
+    assert w.selected_device_index() == 2
+
+
+def test_prefer_builtin_off_falls_back_to_first_with_signal(qtbot: QtBot) -> None:
+    config = Config.model_validate({"camera": {"prefer_builtin": False}})
+    w = _named_window(qtbot, config)
+    assert w.selected_device_index() == 1  # the webcam, first in list order with a signal
 
 
 def test_start_and_stop_camera(window: tuple, qtbot: QtBot) -> None:
