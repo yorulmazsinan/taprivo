@@ -108,6 +108,7 @@ Bilinen sınırlamalar: iyi aydınlatma ve elin tamamının karede olması gerek
 sıkma olarak sayılabilir. Parmak vuruşları kamerayla algılanmaz; bunun için
 klavye simülatörünü kullanın. `taprivo doctor --camera-probe` kamerayı açarak izni denetler ve işlenmiş fps
 değerini raporlar.
+Kapağı kapalı bir MacBook'ta dahili kamera görüntü vermez; kapağı açın ya da başka bir kamera seçin.
 
 ## CLI
 

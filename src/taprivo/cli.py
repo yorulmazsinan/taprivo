@@ -175,9 +175,8 @@ def camera_list(json_output: bool = JSON_OPTION) -> None:
         fail(f"No camera device found. Check {CAMERA_SETTINGS_HINT}.", False)
     default = default_device(devices)
     for d in devices:
-        signal = "signal" if d.has_signal else "no signal"
         marker = " (default)" if default is not None and d.index == default.index else ""
-        typer.echo(f"[{d.index}] {d.label}  {d.width}x{d.height}  {signal}{marker}")
+        typer.echo(f"[{d.index}] {d.label}{marker}")
 
 
 @app.command()
@@ -457,7 +456,11 @@ def _camera_checks(config: Config, probe: bool) -> list[Check]:
             detail,
             ""
             if ok
-            else f"allow camera access for your terminal or Taprivo in {CAMERA_SETTINGS_HINT}",
+            else (
+                f"allow camera access for your terminal or Taprivo in {CAMERA_SETTINGS_HINT}; "
+                "on a MacBook with the lid closed the built-in camera stays dark — "
+                "open the lid or use another camera"
+            ),
         )
     )
     if not ok:
