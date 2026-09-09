@@ -12,7 +12,8 @@ Status labels: implemented, in development, planned. Dates are not promises.
 
 ## 0.2 — Game engine
 - Two hands and combo tiers: implemented (keyboard)
-- Rhythm/BPM, Overdrive: planned
+- Rhythm/BPM: implemented (beta)
+- Overdrive: planned
 
 ## 0.3 — Stats
 - SQLite aggregates, daily stats, session summary: implemented (beta)
