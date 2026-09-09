@@ -52,24 +52,45 @@ toplamları yerel bir SQLite dosyasına yazılır; `taprivo stats --today` ve
 
 ## Kurulum
 
-Taprivo'yu [uv](https://docs.astral.sh/uv/) (ya da pipx) ile global bir komut olarak kurun:
+Size uyan yolu seçin; en kolayı uygulama.
+
+### 1. macOS uygulaması (en kolay, Apple Silicon)
+
+1. [Son sürümden](https://github.com/yorulmazsinan/taprivo/releases/latest)
+   `Taprivo-<sürüm>.dmg` dosyasını indirin.
+2. DMG'yi açıp **Taprivo**'yu **Applications** klasörüne sürükleyin. Uygulama
+   Developer ID ile imzalı ve Apple tarafından notarize edilmiştir; ek adım
+   gerekmeden açılır.
+3. Taprivo'yu açın. HUD belirir; rakam sırasına vurun (sol el `1`–`4`, sağ el
+   `7`–`0`) ve enerjinin birikmesini izleyin ya da el sıkmalarını saymak için
+   **Open Camera** düğmesine tıklayın. macOS ilk seferde kamera izni ister.
+4. Claude Code'u bağlayın (komut satırı aracı uygulamanın içinde gelir):
+
+   ```bash
+   /Applications/Taprivo.app/Contents/MacOS/Taprivo setup claude --install-instructions
+   /Applications/Taprivo.app/Contents/MacOS/Taprivo doctor
+   ```
+
+   Cursor için `setup cursor --install-instructions` kullanın. Çalışırken
+   uygulamayı açık tutun; kapanınca bakiye sıfırlanır.
+
+### 2. Komut satırı (uv veya pipx)
 
 ```bash
-uv tool install taprivo
-taprivo
-taprivo simulate
+uv tool install taprivo            # ya da: pipx install taprivo
+taprivo                            # HUD'u açar
+taprivo setup claude --install-instructions
+taprivo doctor
 ```
 
-pipx de aynı şekilde çalışır: `pipx install taprivo`.
-Kurulum mediapipe, OpenCV ve Qt nedeniyle yaklaşık 1,5 GB yer kaplar. Güncellemek için
-`uv tool upgrade taprivo`, kaldırmak için `uv tool uninstall taprivo`.
+Python 3.12 veya 3.13 gerekir. Kurulum mediapipe, OpenCV ve Qt nedeniyle yaklaşık
+1,5 GB yer kaplar. Güncellemek için `uv tool upgrade taprivo`, kaldırmak için
+`uv tool uninstall taprivo`.
 
-Uygulama olarak mı istersiniz? [Son sürümden](https://github.com/yorulmazsinan/taprivo/releases/latest)
-imzalı ve notarize edilmiş `Taprivo-<sürüm>.dmg` dosyasını indirip (Apple Silicon)
-Taprivo'yu Applications klasörüne sürükleyin. Katkıcılar `packaging/macos/build.sh build`
-ile paketi üretebilir.
+### 3. Kaynaktan (katkıcılar)
 
-Katkı verenler aşağıdaki klon ve `uv sync` yolunu kullanmayı sürdürür.
+Aşağıdaki hızlı başlangıcı izleyin. Katkıcılar `packaging/macos/build.sh build`
+ile uygulama paketini de üretebilir.
 
 ## Hızlı başlangıç (klonla)
 

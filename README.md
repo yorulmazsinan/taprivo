@@ -53,24 +53,44 @@ closed.
 
 ## Install
 
-Install Taprivo as a global command with [uv](https://docs.astral.sh/uv/) (or pipx):
+Pick the path that fits you; the app is the easiest.
+
+### 1. macOS app (easiest, Apple Silicon)
+
+1. Download `Taprivo-<version>.dmg` from the
+   [latest release](https://github.com/yorulmazsinan/taprivo/releases/latest).
+2. Open the DMG and drag **Taprivo** to **Applications**. The app is signed with a
+   Developer ID and notarized by Apple, so it opens without extra steps.
+3. Open Taprivo. The HUD appears; drum the number row (`1`–`4` left hand,
+   `7`–`0` right hand) and watch the energy grow, or click **Open Camera** to
+   count hand squeezes. macOS asks for camera permission the first time.
+4. Connect Claude Code (the app carries the command-line tool inside):
+
+   ```bash
+   /Applications/Taprivo.app/Contents/MacOS/Taprivo setup claude --install-instructions
+   /Applications/Taprivo.app/Contents/MacOS/Taprivo doctor
+   ```
+
+   Use `setup cursor --install-instructions` for Cursor. Keep the app running
+   while you work; the balance resets when it quits.
+
+### 2. Command line (uv or pipx)
 
 ```bash
-uv tool install taprivo
-taprivo
-taprivo simulate
+uv tool install taprivo            # or: pipx install taprivo
+taprivo                            # opens the HUD
+taprivo setup claude --install-instructions
+taprivo doctor
 ```
 
-pipx works the same way: `pipx install taprivo`.
-The install takes about 1.5 GB because of mediapipe, OpenCV and Qt. Upgrade with
-`uv tool upgrade taprivo`, remove with `uv tool uninstall taprivo`.
+Needs Python 3.12 or 3.13. The install takes about 1.5 GB because of mediapipe,
+OpenCV and Qt. Upgrade with `uv tool upgrade taprivo`, remove with
+`uv tool uninstall taprivo`.
 
-Prefer an app? Download the signed and notarized `Taprivo-<version>.dmg` from the
-[latest release](https://github.com/yorulmazsinan/taprivo/releases/latest) (Apple
-Silicon) and drag Taprivo to Applications. Contributors can build it with
+### 3. From source (contributors)
+
+Follow the Quickstart below. Contributors can also build the app bundle with
 `packaging/macos/build.sh build`.
-
-Contributors keep the clone and `uv sync` path below.
 
 ## Quickstart (from a clone)
 
