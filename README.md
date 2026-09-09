@@ -158,8 +158,9 @@ each time a hand goes open → fist → open. Each squeeze is worth 50 Motion
 Energy. Think of it as a short circulation exercise between coding bursts.
 
 1. Start Taprivo and click **Open Camera** in the HUD (or run `uv run taprivo calibrate`).
-2. Pick a device. Devices that deliver black frames (for example an idle iPhone
-   Continuity Camera) are marked *no signal*.
+2. Pick a device. Taprivo prefers the built-in camera; an iPhone Continuity
+   Camera is listed but not opened until you select it (set
+   `camera.prefer_builtin: false` to change the default).
 3. Click **Start Camera**. macOS asks for camera permission the first time.
 4. Click **Calibrate** and follow the prompts: show your hand, open it wide,
    make a fist, then squeeze five times. Apply the result for this session.
@@ -196,7 +197,7 @@ Keep the whole hand inside the frame; a hand partly out of view is ignored.
 | `taprivo remove claude [--project] [--json]` | Disconnect Claude Code |
 | `taprivo setup cursor [--project] [--install-instructions] [--dry-run] [--json]` | Connect Cursor |
 | `taprivo remove cursor [--project] [--json]` | Disconnect Cursor |
-| `taprivo doctor [--json] [--camera-probe]` | Diagnose the local setup; lists camera devices (briefly opens each index to detect a signal); the probe additionally checks permission and measures fps |
+| `taprivo doctor [--json] [--camera-probe]` | Diagnose the local setup; lists camera devices (briefly opens each index, bar an iPhone Continuity Camera, to detect a signal); the probe additionally checks permission and measures fps |
 
 Exit codes: 0 success, 1 operation failure, 2 invalid arguments or config.
 
@@ -228,6 +229,7 @@ hud:
   theme: system   # system | dark | light
 camera:
   device_index: null   # null = choose in the Camera window
+  prefer_builtin: true # false = pick the first camera with a signal instead
   width: 640
   height: 480
 squeeze:

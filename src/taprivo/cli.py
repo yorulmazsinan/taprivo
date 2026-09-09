@@ -621,7 +621,8 @@ def _endpoint_checks(config: Config) -> list[Check]:
 
 def _camera_checks(config: Config, probe: bool) -> list[Check]:
     """model/mediapipe checks are metadata-only. Device enumeration (camera_devices)
-    briefly opens each camera index to detect a signal, and runs unconditionally.
+    briefly opens each camera index except an iPhone Continuity Camera (opening
+    one wakes the phone) to detect a signal, and runs unconditionally.
     The permission and fps probes (camera_probe_fn/fps_probe_fn) only run when
     `probe` is set (the CLI's --camera-probe flag), and never while Taprivo itself
     is running."""
@@ -730,8 +731,9 @@ def doctor(
 ) -> None:
     """Diagnose the local endpoint, token and agent integrations.
 
-    Lists camera devices (briefly opens each index to detect a signal);
-    --camera-probe additionally checks permission and measures fps.
+    Lists camera devices (briefly opens each index, bar an iPhone Continuity
+    Camera, to detect a signal); --camera-probe additionally checks permission
+    and measures fps.
     """
     config = load_config_or_exit(json_output)
     checks = (

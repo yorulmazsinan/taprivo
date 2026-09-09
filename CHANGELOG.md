@@ -5,6 +5,10 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- Camera devices are listed by their real macOS names and kind (built-in, external, Continuity Camera) instead of `Camera 0`, `Camera 1`. Taprivo now prefers the built-in camera by default, so a nearby iPhone no longer takes over, and an iPhone Continuity Camera is listed but never opened until you select it — listing devices no longer wakes the phone. Set `camera.prefer_builtin: false` to go back to picking the first camera with a signal.
+- `taprivo camera list` prints the device name, kind, resolution and signal state; its `--json` output gains `name`, `kind` and `probed` alongside the existing fields, and `taprivo doctor` names the built-in camera in its `camera_devices` check.
+
 ## [0.1.0b4] - 2026-09-09
 
 Beta preview with a signed macOS app and a PyPI package.
