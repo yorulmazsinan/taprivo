@@ -394,9 +394,11 @@ def _endpoint_checks(config: Config) -> list[Check]:
 
 
 def _camera_checks(config: Config, probe: bool) -> list[Check]:
-    """model/mediapipe/camera_devices are metadata-only and always run. The camera
-    is only ever opened -- via camera_probe_fn/fps_probe_fn -- when `probe` is set
-    (the CLI's --camera-probe flag), and never while Taprivo itself is running."""
+    """model/mediapipe checks are metadata-only. Device enumeration (camera_devices)
+    briefly opens each camera index to detect a signal, and runs unconditionally.
+    The permission and fps probes (camera_probe_fn/fps_probe_fn) only run when
+    `probe` is set (the CLI's --camera-probe flag), and never while Taprivo itself
+    is running."""
     checks: list[Check] = []
     try:
         vision_tracker.verify_model()
@@ -496,7 +498,11 @@ def doctor(
         help="Open the camera to check permission and measure processed fps for 5 s.",
     ),
 ) -> None:
-    """Diagnose the local endpoint, token and Claude Code integration."""
+    """Diagnose the local endpoint, token and Claude Code integration.
+
+    Lists camera devices (briefly opens each index to detect a signal);
+    --camera-probe additionally checks permission and measures fps.
+    """
     config = load_config_or_exit(json_output)
     checks = (
         _endpoint_checks(config)

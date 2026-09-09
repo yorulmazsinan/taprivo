@@ -96,6 +96,8 @@ değerindedir; kodlama araları için kısa bir kan dolaşımı egzersizi gibi d
 4. **Calibrate** düğmesine tıklayıp yönergeleri izleyin: elinizi gösterin,
    iyice açın, yumruk yapın, sonra beş kez sıkın. Sonucu bu oturum için uygulayın.
 
+Kamera penceresini kapatmak kamerayı durdurur; sıkmalardan gelen enerji HUD'da kalır.
+
 Kamera penceresi her el için Sol/Sağ açıklık göstergesi ve kalibre edilmiş
 açık/kapalı seviyelerini çentik olarak gösterir. Kamera kareleri bellekte
 işlenir ve yalnızca Kamera penceresinde gösterilir; hiçbir zaman kaydedilmez,
@@ -124,7 +126,7 @@ Elin tamamını kadrajda tutun; kısmen görünen el yok sayılır.
 | `taprivo stats [--json]` | Oturum istatistikleri |
 | `taprivo setup claude [--project] [--install-instructions] [--dry-run]` | Claude Code'u bağla |
 | `taprivo remove claude [--project]` | Claude Code bağlantısını kaldır |
-| `taprivo doctor [--json] [--camera-probe]` | Yerel kurulumu teşhis et; prob kamerayı açar |
+| `taprivo doctor [--json] [--camera-probe]` | Yerel kurulumu teşhis et; kamera cihazlarını listeler (sinyali görmek için her indeksi kısaca açar); prob ayrıca izni denetler ve fps ölçer |
 
 Çıkış kodları: 0 başarı, 1 işlem hatası, 2 geçersiz argüman veya yapılandırma.
 

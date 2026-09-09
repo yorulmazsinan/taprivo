@@ -133,11 +133,12 @@ def test_doctor_without_devices_warns_camera_check(
     assert payload["ok"] is True
 
 
-def test_doctor_without_probe_flag_never_opens_camera(
+def test_doctor_without_probe_flag_skips_permission_and_fps_probes(
     taprivo_home: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Without --camera-probe, doctor must not open the camera at all: device
-    listing is metadata-only, but camera_permission/camera_fps are skipped."""
+    """Without --camera-probe, doctor still enumerates camera devices (which
+    briefly opens each index to detect a signal); only camera_permission and
+    camera_fps -- the permission/fps probes -- are skipped."""
 
     def _must_not_run(config: Config) -> tuple[bool, str]:
         raise AssertionError("camera_probe_fn must not run without --camera-probe")
