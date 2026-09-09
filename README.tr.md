@@ -64,7 +64,9 @@ Size uyan yolu seçin; en kolayı uygulama.
 3. Taprivo'yu açın. HUD belirir; rakam sırasına vurun (sol el `1`–`4`, sağ el
    `7`–`0`) ve enerjinin birikmesini izleyin ya da el sıkmalarını saymak için
    **Open Camera** düğmesine tıklayın. macOS ilk seferde kamera izni ister.
-4. Claude Code'u bağlayın (komut satırı aracı uygulamanın içinde gelir):
+4. HUD'daki **Setup…** düğmesiyle Claude Code veya Cursor'ı bağlayın ve
+   doctor'ı çalıştırın; aynı pencere uygulamayla gelen komut satırı aracını da
+   gösterir. Aynısını Terminal'den yapmak için:
 
    ```bash
    /Applications/Taprivo.app/Contents/MacOS/Taprivo setup claude --install-instructions

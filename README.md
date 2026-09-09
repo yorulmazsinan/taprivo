@@ -64,7 +64,9 @@ Pick the path that fits you; the app is the easiest.
 3. Open Taprivo. The HUD appears; drum the number row (`1`–`4` left hand,
    `7`–`0` right hand) and watch the energy grow, or click **Open Camera** to
    count hand squeezes. macOS asks for camera permission the first time.
-4. Connect Claude Code (the app carries the command-line tool inside):
+4. Click **Setup…** in the HUD to connect Claude Code or Cursor and to run the
+   doctor; the same window shows the command-line tool bundled in the app.
+   The same thing from a Terminal:
 
    ```bash
    /Applications/Taprivo.app/Contents/MacOS/Taprivo setup claude --install-instructions
