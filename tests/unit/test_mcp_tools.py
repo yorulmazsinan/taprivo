@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from mcp.client import Client
 
-from taprivo.config import Config
+from taprivo.config import Config, RhythmConfig
 from taprivo.core.energy import EnergyEngine
 from taprivo.core.events import Finger, Hand
 from taprivo.core.stats_store import StatsStore
@@ -16,7 +16,8 @@ from taprivo.simulator import Simulator
 
 @pytest.fixture
 def engine() -> EnergyEngine:
-    return EnergyEngine(Config())
+    """An engine with the rhythm bonus off, so every tap credits exactly 10."""
+    return EnergyEngine(Config(rhythm=RhythmConfig(enabled=False)))
 
 
 class DrummingClock:
@@ -190,3 +191,34 @@ async def test_get_stats_reports_todays_totals_from_the_store(tmp_path: Path) ->
         "active_seconds": stats["today"]["active_seconds"],
     }
     store.close()
+
+
+async def test_get_stats_reports_the_rhythm(engine: EnergyEngine) -> None:
+    sim = Simulator(engine, Config(), now_ms=SpacedClock())  # a 60 BPM metronome
+    sim.start()
+    for _ in range(8):
+        sim.tap(Hand.RIGHT, Finger.INDEX)
+    stats = await call(engine, "get_stats", {"scope": "session"})
+    assert stats["bpm"] == 60.0
+    assert stats["rhythm_steady"] is True
+    # The fixture engine has the bonus disabled, so the beat is reported but not paid.
+    assert stats["rhythm_multiplier"] == 1.0
+
+
+async def test_get_stats_reports_the_rhythm_multiplier() -> None:
+    engine = EnergyEngine(Config())
+    sim = Simulator(engine, Config(), now_ms=SpacedClock())
+    sim.start()
+    for _ in range(8):
+        sim.tap(Hand.LEFT, Finger.INDEX)
+    stats = await call(engine, "get_stats", {"scope": "session"})
+    assert stats["bpm"] == 60.0
+    assert stats["rhythm_steady"] is True
+    assert stats["rhythm_multiplier"] == 1.25
+
+
+async def test_get_stats_reports_no_rhythm_before_a_beat(engine: EnergyEngine) -> None:
+    stats = await call(engine, "get_stats", {"scope": "session"})
+    assert stats["bpm"] == 0.0
+    assert stats["rhythm_steady"] is False
+    assert stats["rhythm_multiplier"] == 1.0

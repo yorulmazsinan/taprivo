@@ -4,7 +4,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from taprivo import __version__
-from taprivo.cli import app
+from taprivo.cli import NO_VALUE, _rhythm_text, app
 
 runner = CliRunner()
 
@@ -48,3 +48,19 @@ def test_invalid_config_exits_2(taprivo_home: Path) -> None:
     result = runner.invoke(app, ["status"])
     assert result.exit_code == 2
     assert "loopback" in result.output
+
+
+def test_rhythm_line_without_a_beat() -> None:
+    data = {"bpm": 0.0, "rhythm_steady": False, "rhythm_multiplier": 1.0}
+    assert _rhythm_text(data) == NO_VALUE
+    assert _rhythm_text({}) == NO_VALUE
+
+
+def test_rhythm_line_with_an_unsteady_beat() -> None:
+    data = {"bpm": 96.4, "rhythm_steady": False, "rhythm_multiplier": 1.0}
+    assert _rhythm_text(data) == "96 BPM"
+
+
+def test_rhythm_line_with_a_steady_beat() -> None:
+    data = {"bpm": 96.0, "rhythm_steady": True, "rhythm_multiplier": 1.25}
+    assert _rhythm_text(data) == "96 BPM (steady, 1.25×)"
