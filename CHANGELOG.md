@@ -5,7 +5,15 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- App icon: an open hand with a lightning bolt on a dark tile. `packaging/macos/icon.svg` is the only source; `packaging/macos/make_icon.py` renders every size from it into `Taprivo.icns` for the app bundle and `icon.png` for the window and Dock icon.
+
 ### Changed
+- The HUD leads with the energy number: 40 px with tabular figures, a dim `/ 10000` beside it and a bar that fills with an accent gradient and shows quarter ticks. Spending floats a `-250` up from the number and a change of combo tier pulses the combo line; both respect `hud.reduced_motion`.
+- The eight text chips become a hand map: two hand silhouettes whose finger tips light in the finger colour as you drum, dimming to a tint that carries the tap count as a tooltip, with the key caps `1 2 3 4` and `7 8 9 0` drawn under the fingers they belong to.
+- **Reset Session**, **MCP Status** and **Setup…** move into a `⋯` menu, leaving **Start Keyboard** and **Open Camera** as the primary row.
+- The two status dots become two compact badges (`⌨ Keyboard`, `◎ Camera 29 fps`, `⇄ MCP ready`) that always carry text; clicking the MCP badge opens the status dialog and hovering either one shows the full status.
+- Wider spacing, cards with a hairline border and a soft shadow, and a lighter light theme (white cards on `#F3F4F8`).
 - The camera preview draws the hand it is tracking: all 21 landmarks, with the fingertips coloured per finger, joined by the standard connections in that hand's colour (left amber, right green). Every counted squeeze sends an expanding ring out from the palm, so you can see which hand scored.
 - The preview carries a translucent strip with the processed frame rate, the share of frames a hand was found in and the selected device (`29 fps · hand 87 % · FaceTime HD Camera`), and a **Live** badge while the camera runs.
 - The openness meters are labelled with a small hand glyph in that hand's colour instead of the words "Left" and "Right", and the state beside them (Open, Closed, Not seen) is colour-coded while always staying spelled out.
