@@ -8,6 +8,7 @@ import shutil
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from importlib import resources
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
@@ -66,6 +67,11 @@ class AgentAdapter(Protocol):
     def plan_remove(self, options: SetupOptions) -> SetupPlan: ...
 
     def verify(self) -> list[Check]: ...
+
+
+def instructions_text() -> str:
+    """The packaged agent instruction text every adapter installs."""
+    return resources.files("taprivo.resources").joinpath("agent-instructions.md").read_text("utf-8")
 
 
 def write_if_changed(path: Path, content: str) -> bool:

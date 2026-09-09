@@ -8,7 +8,6 @@ import shutil
 import stat
 import subprocess
 from collections.abc import Callable
-from importlib import resources
 from pathlib import Path
 
 from taprivo import paths
@@ -20,6 +19,7 @@ from taprivo.adapters.base import (
     SetupOptions,
     SetupPlan,
     backup,
+    instructions_text,
     merge_mcp_server,
     redact,
     remove_block,
@@ -40,10 +40,6 @@ Runner = Callable[[list[str]], subprocess.CompletedProcess[str]]
 
 def default_runner(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, capture_output=True, text=True, check=False)
-
-
-def instructions_text() -> str:
-    return resources.files("taprivo.resources").joinpath("agent-instructions.md").read_text("utf-8")
 
 
 class ClaudeAdapter:

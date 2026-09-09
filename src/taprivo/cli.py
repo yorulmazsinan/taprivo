@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, NoReturn
@@ -12,8 +12,9 @@ from typing import Any, NoReturn
 import typer
 
 from taprivo import __version__, paths
-from taprivo.adapters.base import Check, SetupError, SetupOptions, SetupPlan
+from taprivo.adapters.base import AgentAdapter, Check, SetupError, SetupOptions, SetupPlan
 from taprivo.adapters.claude import ClaudeAdapter
+from taprivo.adapters.cursor import CursorAdapter
 from taprivo.config import Config, ConfigError, load_config
 from taprivo.mcp.client import (
     ClientError,
@@ -273,6 +274,10 @@ def make_claude_adapter(config: Config) -> ClaudeAdapter:
     return ClaudeAdapter(config)
 
 
+def make_cursor_adapter(config: Config) -> CursorAdapter:
+    return CursorAdapter(config)
+
+
 def _print_plan(plan: SetupPlan, dry_run: bool) -> None:
     title = "Dry run: planned actions" if dry_run else "Planned actions"
     typer.echo(f"{title}:")
@@ -282,37 +287,69 @@ def _print_plan(plan: SetupPlan, dry_run: bool) -> None:
         typer.echo(f"  note: {note}")
 
 
-def _apply_plan(plan: SetupPlan) -> None:
+def _apply_plan(plan: SetupPlan, json_output: bool = False) -> list[str]:
+    summaries: list[str] = []
     for action in plan.actions:
         try:
             summary = action.apply()
         except SetupError as exc:
-            fail(str(exc), False)
+            fail(str(exc), json_output)
+        summaries.append(summary)
+        if json_output:
+            continue
         typer.echo(f"OK   {action.description}")
         for line in summary.splitlines():
             typer.echo(f"     {line}")
+    return summaries
 
 
-def _setup_claude(project: bool, install_instructions: bool, dry_run: bool) -> None:
-    config = load_config_or_exit(False)
-    adapter = make_claude_adapter(config)
-    if not adapter.detect().found:
-        fail("Claude Code CLI ('claude') not found on PATH. Install Claude Code first.", False)
-    options = SetupOptions(
-        project=project, install_instructions=install_instructions, project_dir=Path.cwd()
-    )
+def _plan_payload(
+    agent: str, plan: SetupPlan, dry_run: bool, summaries: list[str]
+) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "agent": agent,
+        "dry_run": dry_run,
+        "actions": [
+            {
+                "kind": action.kind,
+                "description": action.description,
+                "summary": summaries[index] if index < len(summaries) else None,
+            }
+            for index, action in enumerate(plan.actions)
+        ],
+        "notes": list(plan.notes),
+    }
+
+
+def _run_setup(
+    adapter: AgentAdapter,
+    options: SetupOptions,
+    *,
+    dry_run: bool,
+    json_output: bool,
+    follow_up: Sequence[str] = (),
+) -> None:
     plan = adapter.plan_setup(options)
-    _print_plan(plan, dry_run)
+    if not json_output:
+        _print_plan(plan, dry_run)
+    summaries = [] if dry_run else _apply_plan(plan, json_output)
+    if json_output:
+        emit_json(_plan_payload(adapter.name, plan, dry_run, summaries))
+        return
     if dry_run:
         return
-    _apply_plan(plan)
-    typer.echo("")
-    typer.echo("Next: start Taprivo with 'taprivo simulate', then run 'taprivo doctor'.")
-    if not install_instructions:
-        typer.echo(
-            "Optional: 'taprivo setup claude --install-instructions' adds the budget rules to "
-            "~/.claude/CLAUDE.md."
-        )
+    for line in follow_up:
+        typer.echo(line)
+
+
+def _run_remove(adapter: AgentAdapter, options: SetupOptions, *, json_output: bool) -> None:
+    plan = adapter.plan_remove(options)
+    if not json_output:
+        _print_plan(plan, False)
+    summaries = _apply_plan(plan, json_output)
+    if json_output:
+        emit_json(_plan_payload(adapter.name, plan, False, summaries))
 
 
 @setup_app.command("claude")
@@ -324,21 +361,92 @@ def setup_claude(
         help="Import the instruction file from ~/.claude/CLAUDE.md.",
     ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show planned changes without writing."),
+    json_output: bool = JSON_OPTION,
 ) -> None:
     """Register Taprivo with Claude Code (user scope) and write agent instructions."""
-    _setup_claude(project, install_instructions, dry_run)
+    config = load_config_or_exit(json_output)
+    adapter = make_claude_adapter(config)
+    if not adapter.detect().found:
+        fail(
+            "Claude Code CLI ('claude') not found on PATH. Install Claude Code first.", json_output
+        )
+    follow_up = ["", "Next: start Taprivo with 'taprivo simulate', then run 'taprivo doctor'."]
+    if not install_instructions:
+        follow_up.append(
+            "Optional: 'taprivo setup claude --install-instructions' adds the budget rules to "
+            "~/.claude/CLAUDE.md."
+        )
+    _run_setup(
+        adapter,
+        SetupOptions(
+            project=project, install_instructions=install_instructions, project_dir=Path.cwd()
+        ),
+        dry_run=dry_run,
+        json_output=json_output,
+        follow_up=follow_up,
+    )
 
 
 @remove_app.command("claude")
 def remove_claude(
     project: bool = typer.Option(False, "--project", help="Also remove Taprivo from ./.mcp.json."),
+    json_output: bool = JSON_OPTION,
 ) -> None:
     """Remove Taprivo's Claude Code registration and instruction files."""
-    config = load_config_or_exit(False)
-    adapter = make_claude_adapter(config)
-    plan = adapter.plan_remove(SetupOptions(project=project, project_dir=Path.cwd()))
-    _print_plan(plan, False)
-    _apply_plan(plan)
+    config = load_config_or_exit(json_output)
+    _run_remove(
+        make_claude_adapter(config),
+        SetupOptions(project=project, project_dir=Path.cwd()),
+        json_output=json_output,
+    )
+
+
+@setup_app.command("cursor")
+def setup_cursor(
+    project: bool = typer.Option(
+        False, "--project", help="Also add Taprivo to ./.cursor/mcp.json."
+    ),
+    install_instructions: bool = typer.Option(
+        False,
+        "--install-instructions",
+        help="Write ~/.cursor/taprivo.md and, with --project, a .cursor/rules/taprivo.mdc rule.",
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show planned changes without writing."),
+    json_output: bool = JSON_OPTION,
+) -> None:
+    """Register Taprivo with Cursor (user scope) and write agent instructions."""
+    config = load_config_or_exit(json_output)
+    follow_up = ["", "Next: start Taprivo with 'taprivo simulate', then run 'taprivo doctor'."]
+    if not install_instructions:
+        follow_up.append(
+            "Optional: 'taprivo setup cursor --install-instructions' writes the budget rules to "
+            "~/.cursor/taprivo.md."
+        )
+    _run_setup(
+        make_cursor_adapter(config),
+        SetupOptions(
+            project=project, install_instructions=install_instructions, project_dir=Path.cwd()
+        ),
+        dry_run=dry_run,
+        json_output=json_output,
+        follow_up=follow_up,
+    )
+
+
+@remove_app.command("cursor")
+def remove_cursor(
+    project: bool = typer.Option(
+        False, "--project", help="Also remove Taprivo from ./.cursor/mcp.json."
+    ),
+    json_output: bool = JSON_OPTION,
+) -> None:
+    """Remove Taprivo's Cursor registration and instruction files."""
+    config = load_config_or_exit(json_output)
+    _run_remove(
+        make_cursor_adapter(config),
+        SetupOptions(project=project, project_dir=Path.cwd()),
+        json_output=json_output,
+    )
 
 
 def _endpoint_checks(config: Config) -> list[Check]:
@@ -502,7 +610,7 @@ def doctor(
         help="Open the camera to check permission and measure processed fps for 5 s.",
     ),
 ) -> None:
-    """Diagnose the local endpoint, token and Claude Code integration.
+    """Diagnose the local endpoint, token and agent integrations.
 
     Lists camera devices (briefly opens each index to detect a signal);
     --camera-probe additionally checks permission and measures fps.
@@ -512,6 +620,7 @@ def doctor(
         _endpoint_checks(config)
         + _camera_checks(config, camera_probe)
         + make_claude_adapter(config).verify()
+        + make_cursor_adapter(config).verify()
     )
     ok = all(check.status != "fail" for check in checks)
     if json_output:

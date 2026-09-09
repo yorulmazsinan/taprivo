@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from taprivo import cli, paths
 from taprivo.adapters.claude import ClaudeAdapter
+from taprivo.adapters.cursor import CursorAdapter
 from taprivo.vision.camera import CameraDevice
 from tests.integration.conftest import RunningServer, free_port
 from tests.unit.test_claude_adapter import FakeClaude
@@ -23,6 +24,19 @@ def _stub_camera(monkeypatch: pytest.MonkeyPatch) -> None:
         cli, "list_devices_fn", lambda: [CameraDevice(0, "Camera 0 (640x480)", 640, 480, True)]
     )
     monkeypatch.setattr(cli, "camera_probe_fn", lambda config: (True, "read a frame from camera 0"))
+
+
+@pytest.fixture(autouse=True)
+def _stub_cursor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point the Cursor adapter at an empty home so the checks don't depend on
+    whether the machine running the tests has Cursor installed."""
+    monkeypatch.setattr(
+        cli,
+        "make_cursor_adapter",
+        lambda config: CursorAdapter(
+            config, home=tmp_path / "cursor-home", cursor_bin="/nonexistent/cursor"
+        ),
+    )
 
 
 @pytest.fixture
@@ -64,3 +78,15 @@ def test_doctor_when_stopped(taprivo_home: Path, fake_claude: FakeClaude) -> Non
     assert result.exit_code == 1
     assert "FAIL endpoint" in result.output
     assert "taprivo simulate" in result.output
+
+
+def test_doctor_warns_when_cursor_is_absent(taprivo_home: Path, fake_claude: FakeClaude) -> None:
+    taprivo_home.mkdir(parents=True)
+    paths.user_config_path().write_text(f"server:\n  port: {free_port()}\n")
+    paths.read_or_create_token()
+    result = runner.invoke(cli.app, ["doctor", "--json"])
+    checks = {c["name"]: c for c in json.loads(result.output)["checks"]}
+    assert checks["cursor_registration"]["status"] == "warn"
+    assert checks["cursor_registration"]["detail"] == "Cursor not registered"
+    assert "taprivo setup cursor" in checks["cursor_registration"]["hint"]
+    assert "cursor_instructions" not in checks
