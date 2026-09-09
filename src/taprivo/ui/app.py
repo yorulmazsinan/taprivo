@@ -18,6 +18,7 @@ from taprivo.simulator import Simulator
 from taprivo.ui.bridge import EngineSignals, connect_engine
 from taprivo.ui.camera_window import CameraWindow
 from taprivo.ui.hud import HudWindow
+from taprivo.ui.setup_window import SetupWindow
 from taprivo.ui.theme import apply_theme
 from taprivo.ui.vision_bridge import VisionSignals
 from taprivo.vision.controller import VisionController
@@ -49,6 +50,7 @@ def run_app(config: Config, *, start_simulator: bool, open_camera: bool = False)
             palette = apply_theme(qt_app, config.hud.theme)
 
             camera_window: CameraWindow | None = None
+            setup_window: SetupWindow | None = None
             signals = VisionSignals()
 
             def open_camera_window() -> None:
@@ -59,8 +61,21 @@ def run_app(config: Config, *, start_simulator: bool, open_camera: bool = False)
                 camera_window.raise_()
                 camera_window.activateWindow()
 
+            def open_setup_window() -> None:
+                nonlocal setup_window
+                if setup_window is None:
+                    setup_window = SetupWindow(config, palette=palette)
+                setup_window.show()
+                setup_window.raise_()
+                setup_window.activateWindow()
+
             window = HudWindow(
-                engine, simulator, config, on_open_camera=open_camera_window, palette=palette
+                engine,
+                simulator,
+                config,
+                on_open_camera=open_camera_window,
+                on_open_setup=open_setup_window,
+                palette=palette,
             )
             engine_signals = EngineSignals(parent=window)
             engine_signals.snapshot_changed.connect(

@@ -197,3 +197,32 @@ def test_rate_line_drops_the_accent_when_the_beat_breaks(qtbot: QtBot) -> None:
     _render(window, engine, qtbot, taps_per_minute=40, bpm=0.0, rhythm_steady=False)
     qtbot.waitUntil(lambda: window.rate_label.text() == "40 taps/min", timeout=2000)
     assert DARK.text_dim in window.rate_label.styleSheet()
+
+
+def test_setup_button_calls_back(qtbot: QtBot) -> None:
+    calls: list[int] = []
+    engine = EnergyEngine(Config())
+    window = HudWindow(
+        engine, Simulator(engine, Config()), Config(), on_open_setup=lambda: calls.append(1)
+    )
+    qtbot.addWidget(window)
+    assert window.setup_button.text() == "Setup…"
+    window.setup_button.click()
+    assert calls == [1]
+    plain = HudWindow(engine, Simulator(engine, Config()), Config())
+    qtbot.addWidget(plain)
+    assert not plain.setup_button.isEnabled()
+
+
+def test_toolbar_buttons_fit_the_window(hud: HudBundle) -> None:
+    """Five buttons on a 480 px window: every label has to fit its button."""
+    assert hud.window.grab().width() == 480
+    buttons = (
+        hud.window.toggle_button,
+        hud.window.reset_button,
+        hud.window.mcp_button,
+        hud.window.open_camera_button,
+        hud.window.setup_button,
+    )
+    for button in buttons:
+        assert button.width() >= button.sizeHint().width(), button.text()

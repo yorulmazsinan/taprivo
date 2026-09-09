@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import stat
@@ -37,9 +38,64 @@ SERVER_NAME = "taprivo"
 
 Runner = Callable[[list[str]], subprocess.CompletedProcess[str]]
 
+# Where a `claude` install ends up when the launching process has no login
+# shell PATH -- which is exactly the case for a double-clicked .app bundle.
+EXTRA_DIRS = (
+    ".claude/local/bin",
+    ".local/bin",
+    "/opt/homebrew/bin",
+    "/usr/local/bin",
+    ".npm-global/bin",
+    ".volta/bin",
+)
+NVM_GLOB = ".nvm/versions/node"
+
+
+def _node_version_key(path: Path) -> tuple[int, ...]:
+    """Sort nvm's 'v20.11.0' style directories numerically, so v20 beats v9."""
+    digits = re.findall(r"\d+", path.parent.name)
+    return tuple(int(part) for part in digits)
+
+
+def candidate_dirs(home: Path | None = None) -> list[Path]:
+    """Directories to search for `claude` when it is not on PATH, in the order
+    a person's shell would most likely find it. Newest node version first."""
+    base = home or Path.home()
+    dirs = [Path(entry) if entry.startswith("/") else base / entry for entry in EXTRA_DIRS]
+    versions = sorted((base / NVM_GLOB).glob("*/bin"), key=_node_version_key, reverse=True)
+    return dirs + versions
+
+
+def search_path(home: Path | None = None) -> str:
+    """PATH for a `claude` subprocess: the inherited one plus the candidates,
+    appended so a person's own PATH still decides which install wins."""
+    inherited = os.environ.get("PATH", "")
+    extra = [str(path) for path in candidate_dirs(home) if path.is_dir()]
+    return os.pathsep.join([inherited, *extra]) if inherited else os.pathsep.join(extra)
+
+
+def resolve_bin(name: str, home: Path | None = None) -> str | None:
+    """The absolute path to `name`, searching PATH first and the candidate
+    directories after it. An explicit path is taken as given."""
+    found = shutil.which(name)
+    if found is not None:
+        return found
+    if os.sep in name:
+        return None
+    for directory in candidate_dirs(home):
+        candidate = directory / name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
 
 def default_runner(args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(args, capture_output=True, text=True, check=False)
+    env = dict(os.environ)
+    env["PATH"] = search_path()
+    try:
+        return subprocess.run(args, capture_output=True, text=True, check=False, env=env)
+    except OSError as exc:  # a missing binary must read as a failed call, not a crash
+        return subprocess.CompletedProcess(args, 127, "", str(exc))
 
 
 class ClaudeAdapter:
@@ -78,8 +134,14 @@ class ClaudeAdapter:
 
     # -- detection -----------------------------------------------------------
 
+    def binary(self) -> str | None:
+        """The resolved `claude` executable, or None when it is nowhere to be
+        found. Resolved on every call so installing Claude Code while the
+        Setup window is open is picked up without a restart."""
+        return resolve_bin(self._bin, self._home)
+
     def detect(self) -> DetectResult:
-        path = shutil.which(self._bin)
+        path = self.binary()
         if path is None:
             return DetectResult(False)
         proc = self._run([path, "--version"])
@@ -87,7 +149,7 @@ class ClaudeAdapter:
         return DetectResult(True, version, path)
 
     def registered_url(self) -> str | None:
-        proc = self._run([self._bin, "mcp", "get", SERVER_NAME])
+        proc = self._run([self.binary() or self._bin, "mcp", "get", SERVER_NAME])
         if proc.returncode != 0:
             return None
         match = re.search(r"https?://\S+", proc.stdout)
@@ -155,11 +217,12 @@ class ClaudeAdapter:
 
     def _register(self) -> str:
         token = paths.read_or_create_token()
+        claude = self.binary() or self._bin
         if self.registered_url() is not None:
-            self._run([self._bin, "mcp", "remove", "--scope", "user", SERVER_NAME])
+            self._run([claude, "mcp", "remove", "--scope", "user", SERVER_NAME])
         proc = self._run(
             [
-                self._bin,
+                claude,
                 "mcp",
                 "add",
                 "--transport",
@@ -259,7 +322,9 @@ class ClaudeAdapter:
         return plan
 
     def _unregister(self) -> str:
-        proc = self._run([self._bin, "mcp", "remove", "--scope", "user", SERVER_NAME])
+        proc = self._run(
+            [self.binary() or self._bin, "mcp", "remove", "--scope", "user", SERVER_NAME]
+        )
         if proc.returncode != 0:
             raise SetupError(
                 "claude mcp remove failed: " + (proc.stderr.strip() or proc.stdout.strip())
@@ -319,7 +384,12 @@ class ClaudeAdapter:
             checks.append(Check("claude_cli", "ok", f"claude {detected.version or 'found'}"))
         else:
             checks.append(
-                Check("claude_cli", "fail", "'claude' not found on PATH", "install Claude Code")
+                Check(
+                    "claude_cli",
+                    "fail",
+                    "'claude' not found on PATH or in the usual install locations",
+                    "install Claude Code",
+                )
             )
 
         url = self.registered_url() if detected.found else None

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from taprivo import paths
+from taprivo.adapters import claude as claude_adapter
 from taprivo.adapters.base import SetupError, SetupOptions
 from taprivo.adapters.claude import END_MARKER, IMPORT_LINE, START_MARKER, ClaudeAdapter
 from taprivo.config import Config
@@ -227,3 +228,103 @@ def test_verify_reports_each_check(adapter: tuple[ClaudeAdapter, FakeClaude]) ->
     apply_all(ad, SetupOptions(install_instructions=True))
     after = {c.name: c.status for c in ad.verify()}
     assert set(after.values()) == {"ok"}
+
+
+# -- binary resolution ------------------------------------------------------
+
+
+@pytest.fixture
+def home_only_dirs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop /opt/homebrew and /usr/local from the search, so a `claude` that
+    happens to be installed on the machine running the tests cannot answer."""
+    monkeypatch.setattr(
+        claude_adapter,
+        "EXTRA_DIRS",
+        tuple(entry for entry in claude_adapter.EXTRA_DIRS if not entry.startswith("/")),
+    )
+
+
+def _executable(path: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\nexit 0\n")
+    path.chmod(0o755)
+    return path
+
+
+def test_candidate_dirs_cover_the_usual_install_locations(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    dirs = claude_adapter.candidate_dirs(home)
+    assert dirs[:6] == [
+        home / ".claude/local/bin",
+        home / ".local/bin",
+        Path("/opt/homebrew/bin"),
+        Path("/usr/local/bin"),
+        home / ".npm-global/bin",
+        home / ".volta/bin",
+    ]
+
+
+def test_candidate_dirs_list_nvm_versions_newest_first(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    for version in ("v9.1.0", "v18.19.0", "v20.11.0"):
+        (home / ".nvm/versions/node" / version / "bin").mkdir(parents=True)
+    versions = [path.parent.name for path in claude_adapter.candidate_dirs(home)[6:]]
+    assert versions == ["v20.11.0", "v18.19.0", "v9.1.0"]
+
+
+def test_resolve_bin_finds_claude_off_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A double-clicked .app inherits a bare PATH, so the usual install
+    locations have to be searched by hand."""
+    home = tmp_path / "home"
+    installed = _executable(home / ".claude/local/bin/claude")
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    assert claude_adapter.resolve_bin("claude", home) == str(installed)
+
+
+def test_resolve_bin_prefers_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    home = tmp_path / "home"
+    _executable(home / ".claude/local/bin/claude")
+    on_path = _executable(tmp_path / "bin" / "claude")
+    monkeypatch.setenv("PATH", str(tmp_path / "bin"))
+    assert claude_adapter.resolve_bin("claude", home) == str(on_path)
+
+
+def test_resolve_bin_ignores_a_non_executable_file(
+    tmp_path: Path, home_only_dirs: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    (home / ".local/bin").mkdir(parents=True)
+    (home / ".local/bin/claude").write_text("not executable\n")
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    assert claude_adapter.resolve_bin("claude", home) is None
+
+
+def test_search_path_appends_existing_candidate_dirs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    (home / ".volta/bin").mkdir(parents=True)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    parts = claude_adapter.search_path(home).split(":")
+    assert parts[0] == "/usr/bin"
+    assert str(home / ".volta/bin") in parts
+    assert str(home / ".local/bin") not in parts  # not created, so not offered
+
+
+def test_detect_finds_claude_outside_path(
+    taprivo_home: Path, tmp_path: Path, home_only_dirs: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    installed = _executable(home / ".npm-global/bin/claude")
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
+    runner = FakeClaude()
+    ad = ClaudeAdapter(Config(), home=home, runner=runner)
+    detected = ad.detect()
+    assert detected.found and detected.path == str(installed)
+    assert runner.calls[0][0] == str(installed)  # the runner gets the absolute path
+
+
+def test_default_runner_reports_a_missing_binary_instead_of_raising() -> None:
+    proc = claude_adapter.default_runner(["/nonexistent/claude", "--version"])
+    assert proc.returncode != 0
+    assert proc.stdout == ""

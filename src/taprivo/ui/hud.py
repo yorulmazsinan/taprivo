@@ -29,6 +29,7 @@ RENDER_INTERVAL_MS = 33
 WINDOW_WIDTH = 480
 CONTENT_MARGIN = 16
 CHIPS_PER_ROW = 4
+BUTTONS_PER_ROW = 3
 TRACKING_TEXT = {
     "inactive": "Inactive",
     "simulator": "Keyboard running",
@@ -75,6 +76,7 @@ class HudWindow(QWidget):
         config: Config,
         on_open_camera: Callable[[], None] | None = None,
         *,
+        on_open_setup: Callable[[], None] | None = None,
         palette: Palette | None = None,
     ) -> None:
         super().__init__()
@@ -177,6 +179,10 @@ class HudWindow(QWidget):
         if on_open_camera is not None:
             self.open_camera_button.clicked.connect(on_open_camera)
         self.open_camera_button.setEnabled(on_open_camera is not None)
+        self.setup_button = QPushButton("Setup…")
+        if on_open_setup is not None:
+            self.setup_button.clicked.connect(on_open_setup)
+        self.setup_button.setEnabled(on_open_setup is not None)
         buttons = QGridLayout()
         buttons.setHorizontalSpacing(8)
         buttons.setVerticalSpacing(8)
@@ -186,9 +192,10 @@ class HudWindow(QWidget):
                 self.reset_button,
                 self.mcp_button,
                 self.open_camera_button,
+                self.setup_button,
             )
         ):
-            buttons.addWidget(button, index // 2, index % 2)
+            buttons.addWidget(button, index // BUTTONS_PER_ROW, index % BUTTONS_PER_ROW)
 
         self.footer_label = QLabel(
             "Keys 1-4 left hand, 7-8-9-0 right hand. Balance resets when Taprivo quits."
