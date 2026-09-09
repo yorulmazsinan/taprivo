@@ -4,20 +4,20 @@
 
 [Türkçe README](README.tr.md)
 
-Taprivo turns finger taps into a playful work budget for AI coding agents.
-Tap your fingers, build Motion Energy, and let Claude Code read and spend it
-through MCP. Hand tracking will run locally on your device; this release
-ships the keyboard simulator. Camera frames stay on your device. Motion
-Energy is a game mechanic, not API tokens or credits.
+Taprivo turns hand movement into a playful work budget for AI coding agents.
+Squeeze your hands in front of the camera (or tap keys in the simulator), build
+Motion Energy, and let Claude Code read and spend it through MCP. Hand tracking
+runs locally on your device; camera frames never leave it. Motion Energy is a
+game mechanic, not API tokens or credits.
 
-> **Status: alpha (0.1.0a1).** This release ships the camera-free keyboard
-> simulator, the HUD and the MCP server. Camera-based tap detection is in
-> development. Tested on macOS on Apple Silicon.
+> **Status: beta in progress (0.1.0b1).** Camera-based squeeze detection with
+> calibration is available alongside the keyboard simulator. Tested on macOS on
+> Apple Silicon with the built-in FaceTime camera.
 
 ## What it does
 
-- Every valid tap adds 10 Motion Energy to a session balance (cap 10,000).
-- A small always-on-top HUD shows energy, per-finger counts, combo and rate.
+- Every valid tap adds 10 Motion Energy to a session balance (cap 10,000); a camera squeeze counts as five taps (50 energy).
+- A small always-on-top HUD (dark or light theme) shows energy, per-finger counts, combo, rate, camera and MCP status.
 - A local MCP server on `http://127.0.0.1:32145/mcp` exposes `get_energy`,
   `spend_energy`, `get_stats` and `get_session`.
 - Claude Code reads the balance and spends a suitable amount before a
@@ -60,6 +60,8 @@ uv run taprivo simulate
 The HUD opens with the simulator running. Press `1`–`5` to tap thumb, index,
 middle, ring and pinky. Each press adds 10 energy.
 
+With a camera: click **Open Camera** in the HUD or run `uv run taprivo calibrate` — see [Camera](#camera).
+
 ## Connect Claude Code
 
 ```bash
@@ -81,6 +83,30 @@ claude --project`. That writes a `.mcp.json` entry whose token comes from the
 `uv run taprivo remove claude` undoes the registration and removes only the
 files and blocks Taprivo added.
 
+## Camera
+
+Taprivo tracks up to two hands in front of the camera and counts a **squeeze**
+each time a hand goes open → fist → open. Each squeeze is worth 50 Motion
+Energy. Think of it as a short circulation exercise between coding bursts.
+
+1. Start Taprivo and click **Open Camera** in the HUD (or run `uv run taprivo calibrate`).
+2. Pick a device. Devices that deliver black frames (for example an idle iPhone
+   Continuity Camera) are marked *no signal*.
+3. Click **Start Camera**. macOS asks for camera permission the first time.
+4. Click **Calibrate** and follow the prompts: show your hand, open it wide,
+   make a fist, then squeeze five times. Apply the result for this session.
+
+The Camera window shows a Left/Right openness meter per hand with the
+calibrated open and closed levels as tick marks. Camera frames are processed in
+memory and shown only in the Camera window; they are never stored, logged or
+exposed through MCP. Calibration data can be exported as a CSV of per-hand
+features (no images, no raw landmarks) for tuning.
+
+Known limitations: good lighting and the whole hand in frame are needed; very
+quick squeezes are ignored; typing with your hands in view can occasionally be
+counted. Per-finger tapping is not detected by the camera — use the keyboard
+simulator for that. `taprivo doctor --camera-probe` opens the camera to check permission and report processed fps.
+
 ## CLI
 
 | Command | What it does |
@@ -88,11 +114,13 @@ files and blocks Taprivo added.
 | `taprivo` | Open the HUD |
 | `taprivo --version` | Print the version |
 | `taprivo simulate` | Open the HUD with the keyboard simulator running |
-| `taprivo status [--json]` | Balance, tracking state and endpoint of the running app |
+| `taprivo camera list [--json]` | List camera devices |
+| `taprivo calibrate` | Open the Camera window for calibration |
+| `taprivo status [--json]` | Balance, tracking state, camera fps and endpoint of the running app |
 | `taprivo stats [--json]` | Session statistics |
 | `taprivo setup claude [--project] [--install-instructions] [--dry-run]` | Connect Claude Code |
 | `taprivo remove claude [--project]` | Disconnect Claude Code |
-| `taprivo doctor [--json]` | Diagnose the local setup |
+| `taprivo doctor [--json] [--camera-probe]` | Diagnose the local setup; the probe opens the camera |
 
 Exit codes: 0 success, 1 operation failure, 2 invalid arguments or config.
 
@@ -112,6 +140,13 @@ hud:
   opacity: 0.92
   reduced_motion: false
   theme: system   # system | dark | light
+camera:
+  device_index: null   # null = choose in the Camera window
+  width: 640
+  height: 480
+squeeze:
+  open_level: 0.80     # calibration overrides both levels for the session
+  closed_level: 0.45
 ```
 
 If port 32145 is taken, the HUD shows `MCP: Error`; set `server.port` and run
@@ -122,15 +157,16 @@ If port 32145 is taken, the HUD shows `MCP: Error`; set `server.port` and run
 - The MCP server binds to loopback only, checks `Host` and `Origin`, and
   requires a random per-user bearer token stored at `~/.config/taprivo/token`
   (mode 0600). No CORS headers are sent.
-- Camera frames (when camera support lands) are processed in memory and are
-  never stored, uploaded or exposed over MCP.
+- Camera frames are processed in memory and are never stored, uploaded or
+  exposed over MCP. The hand-tracking model runs on-device; mediapipe is
+  pinned to a release without usage logging.
 - No telemetry. The only network listener is the local endpoint.
 - Logs stay low-volume and never contain the token or spend reasons in full.
 
 ## Architecture
 
 ```
-Keyboard simulator / (planned) camera
+Camera (MediaPipe hand landmarks, squeeze detector) / keyboard simulator
   → TapEvent
   → EnergyEngine (single lock, atomic spend, idempotency)
       ├─ HUD (PySide6)
@@ -146,8 +182,9 @@ Keyboard simulator / (planned) camera
 | Keyboard simulator | implemented |
 | HUD | implemented |
 | MCP tools and Claude Code setup | implemented |
-| Camera tap detection | in development |
-| Two hands, rhythm, combo bonuses | planned |
+| Camera squeeze detection (two hands) | implemented (beta) |
+| Calibration | implemented (beta) |
+| Rhythm, combo bonuses | planned |
 | Persistent stats (SQLite) | planned |
 | Other agents (Cursor, Codex, …) | planned |
 

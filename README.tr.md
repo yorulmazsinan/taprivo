@@ -4,21 +4,21 @@
 
 [English README](README.md)
 
-Taprivo, parmak vuruşlarını AI kodlama ajanları için oyunlaştırılmış bir iş
-bütçesine dönüştürür. Parmaklarınızla vurun, Motion Energy biriktirin ve
-Claude Code bu bakiyeyi MCP üzerinden okuyup harcasın. El takibi cihazınızda
-yerel olarak çalışacak; bu sürüm klavye simülatörünü içerir. Kamera kareleri
-cihazınızdan çıkmaz. Motion Energy bir oyun mekaniğidir; API token'ı veya
-kredi değildir.
+Taprivo, el hareketini AI kodlama ajanları için oyunlaştırılmış bir iş
+bütçesine dönüştürür. Kameranın önünde ellerinizi sıkın (ya da simülatörde
+tuşlara basın), Motion Energy biriktirin ve Claude Code bu bakiyeyi MCP
+üzerinden okuyup harcasın. El takibi cihazınızda yerel olarak çalışır; kamera
+kareleri cihazınızdan çıkmaz. Motion Energy bir oyun mekaniğidir; API token'ı
+veya kredi değildir.
 
-> **Durum: alfa (0.1.0a1).** Bu sürüm kamerasız klavye simülatörünü, HUD'u ve
-> MCP sunucusunu içerir. Kamerayla vuruş algılama geliştirme aşamasındadır.
-> Apple Silicon macOS üzerinde test edilmiştir.
+> **Durum: beta sürecinde (0.1.0b1).** Kamerayla sıkma algılama ve kalibrasyon,
+> klavye simülatörünün yanında kullanılabilir. Apple Silicon macOS üzerinde
+> dahili FaceTime kamerayla test edilmiştir.
 
 ## Ne yapar?
 
-- Her geçerli vuruş oturum bakiyesine 10 Motion Energy ekler (üst sınır 10.000).
-- Küçük, her zaman üstte duran HUD enerjiyi, parmak sayımlarını, combo ve hızı gösterir.
+- Her geçerli vuruş oturum bakiyesine 10 Motion Energy ekler (üst sınır 10.000); bir kamera sıkması beş vuruş sayılır (50 enerji).
+- Küçük, her zaman üstte duran HUD (koyu veya açık tema) enerjiyi, parmak sayımlarını, combo'yu, hızı, kamera ve MCP durumunu gösterir.
 - `http://127.0.0.1:32145/mcp` adresindeki yerel MCP sunucusu `get_energy`,
   `spend_energy`, `get_stats` ve `get_session` araçlarını sunar.
 - Claude Code, seçtiğiniz talimat dosyasına uyarak büyük bir uygulama
@@ -60,6 +60,8 @@ uv run taprivo simulate
 HUD simülatör açık olarak gelir. `1`–`5` tuşları başparmak, işaret, orta,
 yüzük ve serçe parmağı vurur. Her basış 10 enerji ekler.
 
+Kamerayla: HUD'daki **Open Camera** düğmesine tıklayın veya `uv run taprivo calibrate` çalıştırın — bkz. [Kamera](#kamera).
+
 ## Claude Code bağlantısı
 
 ```bash
@@ -81,6 +83,32 @@ Yapılandırmayı bir depo içinde paylaşmak için `uv run taprivo setup claude
 `uv run taprivo remove claude` kaydı geri alır ve yalnızca Taprivo'nun eklediği
 dosya ve blokları kaldırır.
 
+## Kamera
+
+Taprivo kameranın önündeki en fazla iki eli takip eder ve bir el açık → yumruk →
+açık hareketini tamamladığında bir **sıkma** sayar. Her sıkma 50 Motion Energy
+değerindedir; kodlama araları için kısa bir kan dolaşımı egzersizi gibi düşünün.
+
+1. Taprivo'yu başlatın ve HUD'daki **Open Camera** düğmesine tıklayın (veya `uv run taprivo calibrate` çalıştırın).
+2. Bir cihaz seçin. Siyah kare veren cihazlar (örneğin boşta duran iPhone
+   Continuity Camera) *no signal* olarak işaretlenir.
+3. **Start Camera** düğmesine tıklayın. macOS ilk seferde kamera izni ister.
+4. **Calibrate** düğmesine tıklayıp yönergeleri izleyin: elinizi gösterin,
+   iyice açın, yumruk yapın, sonra beş kez sıkın. Sonucu bu oturum için uygulayın.
+
+Kamera penceresi her el için Sol/Sağ açıklık göstergesi ve kalibre edilmiş
+açık/kapalı seviyelerini çentik olarak gösterir. Kamera kareleri bellekte
+işlenir ve yalnızca Kamera penceresinde gösterilir; hiçbir zaman kaydedilmez,
+loglanmaz ya da MCP üzerinden dışa açılmaz. Kalibrasyon verisi, ayar için el
+başına özelliklerden oluşan bir CSV (görüntü ve ham landmark içermez) olarak
+dışa aktarılabilir.
+
+Bilinen sınırlamalar: iyi aydınlatma ve elin tamamının karede olması gerekir;
+çok hızlı sıkmalar sayılmaz; eller görüş alanındayken klavye kullanmak ara sıra
+sıkma olarak sayılabilir. Parmak vuruşları kamerayla algılanmaz; bunun için
+klavye simülatörünü kullanın. `taprivo doctor --camera-probe` kamerayı açarak izni denetler ve işlenmiş fps
+değerini raporlar.
+
 ## CLI
 
 | Komut | İşlev |
@@ -88,11 +116,13 @@ dosya ve blokları kaldırır.
 | `taprivo` | HUD'u aç |
 | `taprivo --version` | Sürümü yazdır |
 | `taprivo simulate` | HUD'u klavye simülatörü açık olarak başlat |
-| `taprivo status [--json]` | Çalışan uygulamanın bakiyesi, takip durumu ve uç noktası |
+| `taprivo camera list [--json]` | Kamera cihazlarını listele |
+| `taprivo calibrate` | Kalibrasyon için Kamera penceresini aç |
+| `taprivo status [--json]` | Çalışan uygulamanın bakiyesi, takip durumu, kamera fps'i ve uç noktası |
 | `taprivo stats [--json]` | Oturum istatistikleri |
 | `taprivo setup claude [--project] [--install-instructions] [--dry-run]` | Claude Code'u bağla |
 | `taprivo remove claude [--project]` | Claude Code bağlantısını kaldır |
-| `taprivo doctor [--json]` | Yerel kurulumu teşhis et |
+| `taprivo doctor [--json] [--camera-probe]` | Yerel kurulumu teşhis et; prob kamerayı açar |
 
 Çıkış kodları: 0 başarı, 1 işlem hatası, 2 geçersiz argüman veya yapılandırma.
 
@@ -112,6 +142,13 @@ hud:
   opacity: 0.92
   reduced_motion: false
   theme: system   # system | dark | light
+camera:
+  device_index: null   # null = Kamera penceresinde seçilir
+  width: 640
+  height: 480
+squeeze:
+  open_level: 0.80     # kalibrasyon iki seviyeyi de oturum boyunca geçersiz kılar
+  closed_level: 0.45
 ```
 
 32145 portu doluysa HUD `MCP: Error` gösterir; `server.port` değerini değiştirip
@@ -123,15 +160,16 @@ değiştirmez.
 - MCP sunucusu yalnızca loopback'e bağlanır, `Host` ve `Origin` başlıklarını
   denetler ve `~/.config/taprivo/token` (0600) dosyasındaki rastgele kullanıcı
   token'ını ister. CORS başlığı gönderilmez.
-- Kamera kareleri (kamera desteği geldiğinde) bellekte işlenir; kaydedilmez,
-  yüklenmez, MCP'ye açılmaz.
+- Kamera kareleri bellekte işlenir; kaydedilmez, yüklenmez, MCP'ye açılmaz. El
+  takibi modeli cihazda çalışır; mediapipe, kullanım kaydı içermeyen bir
+  sürüme sabitlenmiştir.
 - Telemetri yoktur. Tek ağ dinleyicisi yerel uç noktadır.
 - Loglar düşük hacimlidir; token'ı hiçbir zaman, harcama gerekçelerini ise tam metin olarak içermez.
 
 ## Mimari
 
 ```
-Klavye simülatörü / (planlanan) kamera
+Kamera (MediaPipe el landmark'ları, sıkma algılayıcı) / klavye simülatörü
   → TapEvent
   → EnergyEngine (tek kilit, atomik harcama, idempotency)
       ├─ HUD (PySide6)
@@ -147,8 +185,9 @@ Klavye simülatörü / (planlanan) kamera
 | Klavye simülatörü | uygulandı |
 | HUD | uygulandı |
 | MCP araçları ve Claude Code kurulumu | uygulandı |
-| Kamerayla vuruş algılama | geliştiriliyor |
-| İki el, ritim, combo bonusları | planlandı |
+| Kamerayla sıkma algılama (iki el) | uygulandı (beta) |
+| Kalibrasyon | uygulandı (beta) |
+| Ritim, combo bonusları | planlandı |
 | Kalıcı istatistikler (SQLite) | planlandı |
 | Diğer ajanlar (Cursor, Codex, …) | planlandı |
 

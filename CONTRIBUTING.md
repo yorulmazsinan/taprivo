@@ -21,13 +21,19 @@ uv run mypy
 3. Create a branch, change the behaviour, and run the related tests.
 4. HUD changes: attach a screenshot. Detector or energy changes: add a
    synthetic fixture or a unit test that shows the before/after behaviour.
-5. In the PR, describe the user-visible effect and how you verified it.
+5. Detector or calibration changes: run the manual protocol in
+   `tests/manual/camera-matrix.md` and paste the numbers into the PR.
+6. In the PR, describe the user-visible effect and how you verified it.
 
 ## Ground rules
 
 - Keep camera frames, landmarks, tokens and private paths out of logs, tests
   and issues. Raw camera recordings are never required for a contribution.
 - `core/` stays free of Qt and MCP imports.
+- `vision/` never imports Qt or `mcp/`; mediapipe is imported lazily inside
+  `vision/tracker.py` only. Detector or calibration changes must keep the
+  pinned fixtures in `tests/fixtures/landmarks/` (`*.csv` + `*.events.json`)
+  deliberately regenerated and reviewed.
 - `src/taprivo/ui/app.py` is the composition root and the only `ui/` module
   allowed to import from `mcp/`; `mcp/` never imports `ui/`.
 - Public contract changes (CLI JSON, MCP schemas, config keys) need a note in
