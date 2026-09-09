@@ -15,6 +15,7 @@ Keep a Changelog and the project uses Semantic Versioning.
 ### Changed
 - Pin mediapipe to 0.10.33; a test fails if the installed wheel contains telemetry code.
 - Product framing: the camera counts whole-hand squeezes rather than per-finger taps; finger tapping stays with the keyboard simulator.
+- The squeeze detector ignores hands that are partly outside the camera frame (extrapolated fingers caused false cycles when a hand slid out of view).
 
 ### Known limitations
 - Good lighting and a fully visible hand are needed; typing with hands in view can occasionally register a squeeze.

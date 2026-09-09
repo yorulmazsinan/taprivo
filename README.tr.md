@@ -109,6 +109,7 @@ sıkma olarak sayılabilir. Parmak vuruşları kamerayla algılanmaz; bunun içi
 klavye simülatörünü kullanın. `taprivo doctor --camera-probe` kamerayı açarak izni denetler ve işlenmiş fps
 değerini raporlar.
 Kapağı kapalı bir MacBook'ta dahili kamera görüntü vermez; kapağı açın ya da başka bir kamera seçin.
+Elin tamamını kadrajda tutun; kısmen görünen el yok sayılır.
 
 ## CLI
 

@@ -1,13 +1,21 @@
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import json
 from pathlib import Path
 
 from taprivo.config import SqueezeConfig
 from taprivo.core.events import Finger, Hand, TapSource
-from taprivo.vision.squeeze import Levels, SqueezeDetector, SqueezeParams
-from tests.vision_helpers import hands_frame, replay_csv, run_squeeze, squeeze_cycle, steady
+from taprivo.vision.squeeze import Levels, SqueezeDetector, SqueezeParams, hand_in_frame
+from tests.vision_helpers import (
+    hand_frame,
+    hands_frame,
+    replay_csv,
+    run_squeeze,
+    squeeze_cycle,
+    steady,
+)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "landmarks"
 
@@ -108,6 +116,42 @@ def test_state_exposes_phase_and_seen() -> None:
     assert state.hands[Hand.LEFT].seen is False
 
 
+def test_hand_in_frame_accepts_landmarks_within_bounds() -> None:
+    assert hand_in_frame(hand_frame(0, {})) is True
+
+
+def test_hand_in_frame_rejects_a_landmark_outside_bounds() -> None:
+    frame = hand_frame(0, {})
+    landmarks = list(frame.landmarks)
+    landmarks[8] = (landmarks[8][0], 1.05, landmarks[8][2])  # index fingertip below frame
+    frame = dataclasses.replace(frame, landmarks=tuple(landmarks))
+    assert hand_in_frame(frame) is False
+
+
+def test_edge_artefact_landmarks_suppress_the_cycle() -> None:
+    # A normal open->closed->open cycle registers one cycle (five finger events).
+    seq = steady(0, 600) + squeeze_cycle(600)
+    assert len(run_squeeze(make(), seq)) == 5
+
+    # Shift every "open" frame of the cycle (openness above the open band) so one
+    # landmark reports outside the frame, mimicking a hand sliding past the bottom
+    # edge as it appears to reopen. Those frames are then treated as hand-not-visible,
+    # so the reopen is never observed and no cycle is registered.
+    _, open_at = Levels(SqueezeParams().open_level, SqueezeParams().closed_level).bands(
+        SqueezeParams().band_ratio
+    )
+    edged_cycle = []
+    for hands in squeeze_cycle(600):
+        if hands and hands[0].features.openness > open_at:
+            hand = hands[0]
+            landmarks = list(hand.landmarks)
+            landmarks[0] = (landmarks[0][0], 1.4, landmarks[0][2])
+            hand = dataclasses.replace(hand, landmarks=tuple(landmarks))
+            hands = (hand,)
+        edged_cycle.append(hands)
+    assert run_squeeze(make(), steady(0, 600) + edged_cycle) == []
+
+
 def test_recorded_replay_is_deterministic_and_pinned() -> None:
     path = FIXTURES / "spike-2026-09-08.csv"
     first = replay_csv(path, SqueezeParams())
@@ -136,11 +180,31 @@ def test_field_recording_counts_both_hands() -> None:
 
     right_cycles = [e for e in first if e.hand is Hand.RIGHT and e.finger is Finger.INDEX]
     left_cycles = [e for e in first if e.hand is Hand.LEFT and e.finger is Finger.INDEX]
-    assert len(right_cycles) == 28
+    assert len(right_cycles) == 27
     assert len(left_cycles) == 20
-    assert len(first) == 48 * 5
+    assert len(first) == 47 * 5
 
     for cycles in (right_cycles, left_cycles):
         timestamps = sorted(e.timestamp_monotonic_ms for e in cycles)
         gaps = [b - a for a, b in itertools.pairwise(timestamps)]
         assert all(gap >= 500 for gap in gaps)
+
+
+def test_typing_recording_counts_few_cycles() -> None:
+    path = FIXTURES / "typing-2026-09-09.csv"
+    first = replay_csv(path, SqueezeParams())
+    second = replay_csv(path, SqueezeParams())
+    as_list = [
+        {"ts_ms": e.timestamp_monotonic_ms, "hand": e.hand.value, "finger": e.finger.value}
+        for e in first
+    ]
+    assert as_list == [
+        {"ts_ms": e.timestamp_monotonic_ms, "hand": e.hand.value, "finger": e.finger.value}
+        for e in second
+    ]
+    assert as_list == json.loads((FIXTURES / "typing-2026-09-09.events.json").read_text())
+
+    right_cycles = [e for e in first if e.hand is Hand.RIGHT and e.finger is Finger.INDEX]
+    left_cycles = [e for e in first if e.hand is Hand.LEFT and e.finger is Finger.INDEX]
+    assert len(right_cycles) == 3
+    assert len(left_cycles) == 0

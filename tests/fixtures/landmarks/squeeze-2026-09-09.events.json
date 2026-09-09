@@ -1173,30 +1173,5 @@
   "ts_ms": 139248133,
   "hand": "right",
   "finger": "pinky"
- },
- {
-  "ts_ms": 139248800,
-  "hand": "right",
-  "finger": "thumb"
- },
- {
-  "ts_ms": 139248800,
-  "hand": "right",
-  "finger": "index"
- },
- {
-  "ts_ms": 139248800,
-  "hand": "right",
-  "finger": "middle"
- },
- {
-  "ts_ms": 139248800,
-  "hand": "right",
-  "finger": "ring"
- },
- {
-  "ts_ms": 139248800,
-  "hand": "right",
-  "finger": "pinky"
  }
 ]
