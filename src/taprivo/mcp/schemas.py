@@ -38,6 +38,16 @@ class LastSpendOut(BaseModel):
     at_utc: str
 
 
+class TodayOut(BaseModel):
+    """Totals for the current UTC day, from the local statistics file."""
+
+    sessions: int
+    taps_total: int
+    generated: int
+    spent: int
+    active_seconds: int
+
+
 class StatsOut(BaseModel):
     schema_version: int = 1
     session_id: str
@@ -54,6 +64,10 @@ class StatsOut(BaseModel):
     spend_count: int
     last_spend: LastSpendOut | None
     session_duration_seconds: int
+    today: TodayOut | None = Field(
+        default=None,
+        description="Totals for today; null when persistent statistics are off or empty.",
+    )
 
 
 class SessionOut(BaseModel):

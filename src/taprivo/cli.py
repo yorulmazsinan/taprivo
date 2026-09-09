@@ -6,6 +6,7 @@ import json
 import time
 from collections.abc import Callable, Coroutine, Sequence
 from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -16,6 +17,8 @@ from taprivo.adapters.base import AgentAdapter, Check, SetupError, SetupOptions,
 from taprivo.adapters.claude import ClaudeAdapter
 from taprivo.adapters.cursor import CursorAdapter
 from taprivo.config import Config, ConfigError, load_config
+from taprivo.core.stats_sink import DailyRow
+from taprivo.core.stats_store import StatsStore
 from taprivo.mcp.client import (
     ClientError,
     LocalClient,
@@ -37,6 +40,8 @@ app = typer.Typer(
 
 JSON_OPTION = typer.Option(False, "--json", help="Machine-readable JSON output.")
 NOT_RUNNING_HINT = "Taprivo is not running. Start it with 'taprivo' or 'taprivo simulate'."
+NO_STATS_HINT = "No statistics file yet. Run Taprivo once with stats.enabled: true to create it."
+HISTORY_HEADER = "Day         Sessions  Taps  Generated  Spent  Active"
 CAMERA_SETTINGS_HINT = "System Settings > Privacy & Security > Camera"
 
 
@@ -241,10 +246,98 @@ async def _stats_payload(client: LocalClient) -> dict[str, Any]:
     return {"ok": True, **stats}
 
 
+def _daily_json(row: DailyRow) -> dict[str, Any]:
+    return asdict(row)
+
+
+def _hhmm(seconds: int) -> str:
+    return f"{seconds // 3600:02d}:{seconds % 3600 // 60:02d}"
+
+
+def open_store_or_exit(config: Config, json_output: bool) -> StatsStore:
+    """Open the statistics file for reading; the running app is not needed."""
+    path = paths.stats_path(config.stats.path)
+    if not path.exists():
+        fail(NO_STATS_HINT, json_output)
+    return StatsStore(path)
+
+
+def _today_row(config: Config) -> DailyRow | None:
+    """Today's totals, or None when the file is missing or has no row yet."""
+    path = paths.stats_path(config.stats.path)
+    if not config.stats.enabled or not path.exists():
+        return None
+    store = StatsStore(path)
+    try:
+        return store.today(datetime.now(UTC).date().isoformat())
+    finally:
+        store.close()
+
+
+def _print_today(row: DailyRow) -> None:
+    typer.echo(
+        f"Today:     {row.sessions} sessions, {row.taps_total} taps, "
+        f"+{row.generated} / -{row.spent}"
+    )
+
+
+def _stats_today(config: Config, json_output: bool) -> None:
+    store = open_store_or_exit(config, json_output)
+    try:
+        row = store.today(datetime.now(UTC).date().isoformat())
+    finally:
+        store.close()
+    if json_output:
+        emit_json({"ok": True, "today": _daily_json(row) if row else None})
+        return
+    if row is None:
+        typer.echo("No statistics for today yet.")
+        return
+    _print_today(row)
+    typer.echo(f"Active:    {_hhmm(row.active_seconds)}")
+
+
+def _stats_history(config: Config, json_output: bool, days: int) -> None:
+    store = open_store_or_exit(config, json_output)
+    try:
+        rows = store.history(days)
+    finally:
+        store.close()
+    if json_output:
+        emit_json({"ok": True, "days": days, "history": [_daily_json(row) for row in rows]})
+        return
+    if not rows:
+        typer.echo("No statistics recorded yet.")
+        return
+    typer.echo(HISTORY_HEADER)
+    for row in rows:
+        typer.echo(
+            f"{row.day:<10}  {row.sessions:>8}  {row.taps_total:>4}  {row.generated:>9}  "
+            f"{row.spent:>5}  {_hhmm(row.active_seconds)}"
+        )
+
+
 @app.command()
-def stats(json_output: bool = JSON_OPTION) -> None:
-    """Show tap and spend statistics for the current session."""
+def stats(
+    json_output: bool = JSON_OPTION,
+    today: bool = typer.Option(False, "--today", help="Totals for today, read from disk."),
+    history: bool = typer.Option(False, "--history", help="Daily totals, read from disk."),
+    days: int = typer.Option(30, "--days", help="How many recorded days --history shows."),
+) -> None:
+    """Show tap and spend statistics for the current session.
+
+    --today and --history read the local statistics file instead, so they work
+    while Taprivo is not running.
+    """
     config = load_config_or_exit(json_output)
+    if today and history:
+        fail("Use either --today or --history, not both.", json_output, code=2)
+    if today:
+        _stats_today(config, json_output)
+        return
+    if history:
+        _stats_history(config, json_output, days)
+        return
     data = query(config, json_output, _stats_payload)
     if json_output:
         emit_json(data)
@@ -262,6 +355,9 @@ def stats(json_output: bool = JSON_OPTION) -> None:
     last = data["last_spend"]
     last_text = f"{last['amount']} for '{last['reason']}' at {last['at_utc']}" if last else "none"
     typer.echo(f"Spends:    {data['spend_count']} (last: {last_text})")
+    row = _today_row(config)
+    if row is not None:
+        _print_today(row)
 
 
 setup_app = typer.Typer(help="Connect an AI coding agent to Taprivo.")

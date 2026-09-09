@@ -17,7 +17,14 @@ from pydantic import Field
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine, SpendRequest
-from taprivo.mcp.schemas import EnergyOut, LastSpendOut, SessionOut, SpendOut, StatsOut
+from taprivo.mcp.schemas import (
+    EnergyOut,
+    LastSpendOut,
+    SessionOut,
+    SpendOut,
+    StatsOut,
+    TodayOut,
+)
 from taprivo.mcp.security import ASGIApp, LocalGuardMiddleware
 
 TOOL_NAMES = ("get_energy", "spend_energy", "get_stats", "get_session")
@@ -118,6 +125,18 @@ def build_server(engine: EnergyEngine, config: Config) -> MCPServer:
             if s.last_spend
             else None
         )
+        daily = engine.today()
+        today = (
+            TodayOut(
+                sessions=daily.sessions,
+                taps_total=daily.taps_total,
+                generated=daily.generated,
+                spent=daily.spent,
+                active_seconds=daily.active_seconds,
+            )
+            if daily is not None
+            else None
+        )
         return StatsOut(
             session_id=s.session_id,
             taps_total=s.taps_total,
@@ -129,6 +148,7 @@ def build_server(engine: EnergyEngine, config: Config) -> MCPServer:
             spend_count=s.spend_count,
             last_spend=last,
             session_duration_seconds=s.session_duration_seconds,
+            today=today,
         )
 
     @mcp.tool(title="Get session", annotations=read_only)
