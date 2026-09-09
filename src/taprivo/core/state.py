@@ -21,6 +21,27 @@ class LastSpend:
 
 
 @dataclass(frozen=True, slots=True)
+class AgentStatus:
+    """What Claude Code last reported through its status line.
+
+    Every field is optional: an API-key user has no rate limits, and an older
+    Claude Code may omit anything. `received_at_ms` is a wall-clock epoch in
+    milliseconds so the HUD can age the card across a sleep.
+    """
+
+    model: str | None
+    context_used: float | None
+    cost_usd: float | None
+    duration_s: int | None
+    five_hour_used: float | None
+    five_hour_resets_at: int | None
+    seven_day_used: float | None
+    seven_day_resets_at: int | None
+    version: str | None
+    received_at_ms: int
+
+
+@dataclass(frozen=True, slots=True)
 class AppSnapshot:
     session_id: str
     started_at_utc: datetime
@@ -50,4 +71,5 @@ class AppSnapshot:
     rhythm_multiplier: float = 1.0
     taps_per_hand: dict[Hand, int] = field(default_factory=dict)
     taps_per_hand_finger: dict[tuple[Hand, Finger], int] = field(default_factory=dict)
+    agent: AgentStatus | None = None
     schema_version: int = field(default=1)

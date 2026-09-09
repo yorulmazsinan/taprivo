@@ -79,6 +79,27 @@ class StatsOut(BaseModel):
     )
 
 
+class AgentOut(BaseModel):
+    """What the coding agent last reported about its own session, if anything."""
+
+    model: str | None = None
+    context_used: float | None = Field(
+        default=None, description="Share of the context window in use, 0-100."
+    )
+    cost_usd: float | None = None
+    duration_s: int | None = None
+    five_hour_used: float | None = Field(
+        default=None, description="Five-hour rate limit used, 0-100; null without a subscription."
+    )
+    five_hour_resets_at: int | None = Field(
+        default=None, description="Unix epoch seconds at which the five-hour window resets."
+    )
+    seven_day_used: float | None = None
+    seven_day_resets_at: int | None = None
+    version: str | None = None
+    age_s: int = Field(description="Seconds since the report arrived.")
+
+
 class SessionOut(BaseModel):
     schema_version: int = 1
     session_id: str
@@ -89,3 +110,6 @@ class SessionOut(BaseModel):
     last_tool_call_utc: str | None
     camera_fps: float = 0.0
     detection_ratio: float = 0.0
+    agent: AgentOut | None = Field(
+        default=None, description="Claude Code's own usage, when its status line reports it."
+    )

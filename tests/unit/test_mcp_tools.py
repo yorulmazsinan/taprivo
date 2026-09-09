@@ -11,6 +11,7 @@ from taprivo.core.energy import EnergyEngine
 from taprivo.core.events import Finger, Hand
 from taprivo.core.stats_store import StatsStore
 from taprivo.mcp.server import TOOL_NAMES, build_server
+from taprivo.mcp.statusline import parse_payload
 from taprivo.simulator import Simulator
 
 
@@ -148,6 +149,31 @@ async def test_get_stats_and_session(engine: EnergyEngine, simulator: Simulator)
     assert session["mode"] == "simulator"
     assert session["tracking"] == "simulator"
     assert session["mcp_uptime_seconds"] >= 0
+
+
+async def test_get_session_reports_the_agent(engine: EnergyEngine) -> None:
+    engine.set_agent_status(
+        parse_payload(
+            {
+                "model": {"display_name": "Opus"},
+                "context_window": {"used_percentage": 63.0},
+                "rate_limits": {"five_hour": {"used_percentage": 42.0, "resets_at": 1_757_000_000}},
+                "version": "2.1.0",
+            }
+        )
+    )
+    agent = (await call(engine, "get_session"))["agent"]
+    assert agent["model"] == "Opus"
+    assert agent["context_used"] == 63.0
+    assert agent["five_hour_used"] == 42.0
+    assert agent["five_hour_resets_at"] == 1_757_000_000
+    assert agent["seven_day_used"] is None
+    assert agent["version"] == "2.1.0"
+    assert agent["age_s"] >= 0
+
+
+async def test_get_session_omits_the_agent_until_it_reports(engine: EnergyEngine) -> None:
+    assert (await call(engine, "get_session"))["agent"] is None
 
 
 async def test_get_session_reports_camera_stats(engine: EnergyEngine) -> None:
