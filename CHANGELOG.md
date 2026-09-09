@@ -5,6 +5,10 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Setup window in the app: **Setup…** in the HUD opens a window that connects or disconnects Claude Code and Cursor, shows whether each one is connected, runs the doctor into a table (optionally with the camera probe) and displays the command-line tool that ships with this install, with a Copy button. Installing from the DMG no longer needs a terminal.
+- The Claude Code adapter finds `claude` even when it is not on the launching process's PATH: it also searches `~/.claude/local/bin`, `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/.npm-global/bin`, `~/.volta/bin` and the newest `~/.nvm/versions/node/*/bin`, and exports those directories to the subprocess. This is what the double-clicked app needs.
+
 ### Changed
 - Camera devices are listed by their real macOS names and kind (built-in, external, Continuity Camera) instead of `Camera 0`, `Camera 1`. Taprivo now prefers the built-in camera by default, so a nearby iPhone no longer takes over, and an iPhone Continuity Camera is listed but never opened until you select it — listing devices no longer wakes the phone. Set `camera.prefer_builtin: false` to go back to picking the first camera with a signal.
 - `taprivo camera list` prints the device name, kind, resolution and signal state; its `--json` output gains `name`, `kind` and `probed` alongside the existing fields, and `taprivo doctor` names the built-in camera in its `camera_devices` check.
