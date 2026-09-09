@@ -5,6 +5,14 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0b4] - 2026-09-09
+
+Beta preview with a signed macOS app and a PyPI package.
+
+### Added
+- Signed and notarized macOS app bundle (DMG, Apple Silicon) built with `packaging/macos/build.sh`; Gatekeeper assessment now runs after stapling and dangling symlinks left by trimmed Qt frameworks are pruned before signing.
+- Releases publish to PyPI automatically through trusted publishing; install with `uv tool install taprivo`.
+
 ### Added
 - macOS packaging script: `packaging/macos/build.sh` builds a standalone `Taprivo.app` with PyInstaller and can sign it with a Developer ID, notarize it and wrap it in a DMG (`build`, `sign`, `notarize`, `dmg`, `all`). Apple Silicon only; see `packaging/macos/README.md`.
 
@@ -75,7 +83,8 @@ macOS package yet.
 - No camera support yet; the balance resets when the app quits.
 - Only Claude Code is tested as an MCP client.
 
-[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b3...HEAD
+[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b4...HEAD
+[0.1.0b4]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b4
 [0.1.0b3]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b3
 [0.1.0b2]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b2
 [0.1.0b1]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b1

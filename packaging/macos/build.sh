@@ -76,6 +76,7 @@ cmd_build() {
         --distpath "$DIST_DIR" --workpath "$WORK_DIR"
 
     require_app
+    prune_broken_symlinks
     log "Built $APP ($(du -sh "$APP" | cut -f1))"
 }
 
@@ -83,6 +84,15 @@ cmd_build() {
 sign_file() {
     codesign --force --options runtime --timestamp \
         --sign "$TAPRIVO_SIGN_IDENTITY" "$1"
+}
+
+prune_broken_symlinks() {
+    # Frameworks trimmed by the spec leave dangling symlinks under Contents/Resources;
+    # codesign --deep fails on them with "No such file or directory".
+    local count
+    count=$(find "$APP" -type l ! -exec test -e {} \; -print | wc -l | tr -d ' ')
+    find "$APP" -type l ! -exec test -e {} \; -delete
+    log "Pruned $count dangling symlinks"
 }
 
 cmd_sign() {
@@ -121,8 +131,7 @@ List the identities in your keychain with: security find-identity -v -p codesign
 
     log "Verifying the signature"
     codesign --verify --deep --strict --verbose=2 "$APP"
-    spctl --assess --type execute --verbose=2 "$APP"
-    log "Signature OK"
+    log "Signature OK (Gatekeeper assessment runs after notarization)"
 }
 
 cmd_notarize() {
@@ -148,6 +157,7 @@ then export TAPRIVO_NOTARY_PROFILE=taprivo-notary"
     log "Stapling the ticket"
     xcrun stapler staple "$APP"
     xcrun stapler validate "$APP"
+    spctl --assess --type execute --verbose=2 "$APP"
     rm -f "$zip"
     log "Notarized and stapled"
 }
