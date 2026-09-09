@@ -44,7 +44,10 @@ def test_camera_list_json(taprivo_home: Path, monkeypatch: pytest.MonkeyPatch) -
 def test_camera_list_human_and_empty(taprivo_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "list_devices_fn", lambda: DEVICES)
     result = runner.invoke(cli.app, ["camera", "list"])
-    assert result.exit_code == 0 and "no signal" in result.output and "Camera 1" in result.output
+    assert result.exit_code == 0
+    assert "[0] Camera 0 (1920x1080) — no signal" in result.output
+    assert "[1] Camera 1 (640x480) (default)" in result.output
+    assert result.output.count("(default)") == 1
     monkeypatch.setattr(cli, "list_devices_fn", lambda: [])
     empty = runner.invoke(cli.app, ["camera", "list"])
     assert empty.exit_code == 1 and "No camera" in empty.output
@@ -174,6 +177,29 @@ def test_doctor_camera_probe_skipped_while_taprivo_running(
         assert "camera_fps" not in statuses
     finally:
         lock.release()
+
+
+def test_doctor_camera_probe_no_frame_hints_at_closed_lid(
+    taprivo_home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A camera that opens but never delivers a frame is the classic closed-lid
+    MacBook symptom: the hint must point people at the lid, not just Settings."""
+    monkeypatch.setattr(cli, "list_devices_fn", lambda: DEVICES)
+    monkeypatch.setattr(
+        cli,
+        "camera_probe_fn",
+        lambda config: (False, "camera 0 opened but delivered no frame within 3 s"),
+    )
+    paths.user_config_path().parent.mkdir(parents=True, exist_ok=True)
+    paths.user_config_path().write_text("server:\n  port: 1\n")
+    result = runner.invoke(cli.app, ["doctor", "--json", "--camera-probe"])
+    payload = json.loads(result.output)
+    checks = {c["name"]: c for c in payload["checks"]}
+    assert checks["camera_permission"]["status"] == "fail"
+    assert checks["camera_permission"]["detail"] == (
+        "camera 0 opened but delivered no frame within 3 s"
+    )
+    assert "lid" in checks["camera_permission"]["hint"]
 
 
 def test_fps_probe_fn_catches_camera_error(

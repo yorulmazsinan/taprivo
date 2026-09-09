@@ -107,6 +107,7 @@ Known limitations: good lighting and the whole hand in frame are needed; very
 quick squeezes are ignored; typing with your hands in view can occasionally be
 counted. Per-finger tapping is not detected by the camera — use the keyboard
 simulator for that. `taprivo doctor --camera-probe` opens the camera to check permission and report processed fps.
+A MacBook with its lid closed keeps the built-in camera dark; open the lid or pick another camera.
 
 ## CLI
 
