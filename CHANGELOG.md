@@ -5,6 +5,10 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0b5] - 2026-09-09
+
+Beta preview: everything from the app window, and the built-in camera first.
+
 ### Added
 - Setup window in the app: **Setup…** in the HUD opens a window that connects or disconnects Claude Code and Cursor, shows whether each one is connected, runs the doctor into a table (optionally with the camera probe) and displays the command-line tool that ships with this install, with a Copy button. Installing from the DMG no longer needs a terminal.
 - The Claude Code adapter finds `claude` even when it is not on the launching process's PATH: it also searches `~/.claude/local/bin`, `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/.npm-global/bin`, `~/.volta/bin` and the newest `~/.nvm/versions/node/*/bin`, and exports those directories to the subprocess. This is what the double-clicked app needs.
@@ -91,7 +95,8 @@ macOS package yet.
 - No camera support yet; the balance resets when the app quits.
 - Only Claude Code is tested as an MCP client.
 
-[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b4...HEAD
+[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b5...HEAD
+[0.1.0b5]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b5
 [0.1.0b4]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b4
 [0.1.0b3]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b3
 [0.1.0b2]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b2
