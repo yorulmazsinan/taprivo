@@ -158,8 +158,9 @@ açık hareketini tamamladığında bir **sıkma** sayar. Her sıkma 50 Motion E
 değerindedir; kodlama araları için kısa bir kan dolaşımı egzersizi gibi düşünün.
 
 1. Taprivo'yu başlatın ve HUD'daki **Open Camera** düğmesine tıklayın (veya `uv run taprivo calibrate` çalıştırın).
-2. Bir cihaz seçin. Siyah kare veren cihazlar (örneğin boşta duran iPhone
-   Continuity Camera) *no signal* olarak işaretlenir.
+2. Bir cihaz seçin. Taprivo dahili kamerayı tercih eder; iPhone Continuity
+   Camera listelenir ama siz seçmeden açılmaz (varsayılanı değiştirmek için
+   `camera.prefer_builtin: false`).
 3. **Start Camera** düğmesine tıklayın. macOS ilk seferde kamera izni ister.
 4. **Calibrate** düğmesine tıklayıp yönergeleri izleyin: elinizi gösterin,
    iyice açın, yumruk yapın, sonra beş kez sıkın. Sonucu bu oturum için uygulayın.
@@ -198,7 +199,7 @@ Elin tamamını kadrajda tutun; kısmen görünen el yok sayılır.
 | `taprivo remove claude [--project] [--json]` | Claude Code bağlantısını kaldır |
 | `taprivo setup cursor [--project] [--install-instructions] [--dry-run] [--json]` | Cursor'ı bağla |
 | `taprivo remove cursor [--project] [--json]` | Cursor bağlantısını kaldır |
-| `taprivo doctor [--json] [--camera-probe]` | Yerel kurulumu teşhis et; kamera cihazlarını listeler (sinyali görmek için her indeksi kısaca açar); prob ayrıca izni denetler ve fps ölçer |
+| `taprivo doctor [--json] [--camera-probe]` | Yerel kurulumu teşhis et; kamera cihazlarını listeler (iPhone Continuity Camera dışında, sinyali görmek için her indeksi kısaca açar); prob ayrıca izni denetler ve fps ölçer |
 
 Çıkış kodları: 0 başarı, 1 işlem hatası, 2 geçersiz argüman veya yapılandırma.
 
@@ -230,6 +231,7 @@ hud:
   theme: system   # system | dark | light
 camera:
   device_index: null   # null = Kamera penceresinde seçilir
+  prefer_builtin: true # false = sinyal veren ilk kamerayı seç
   width: 640
   height: 480
 squeeze:

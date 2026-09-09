@@ -13,6 +13,7 @@ each under its own license. Distributions of Taprivo must keep these notices.
 | numpy | BSD-3-Clause | via mediapipe |
 | opencv-contrib-python | Apache-2.0 | via mediapipe |
 | sounddevice | MIT | via mediapipe; unused by Taprivo |
+| PyObjC (pyobjc-core, pyobjc-framework-AVFoundation) | MIT | camera device names on macOS |
 | MCP Python SDK (`mcp`) | MIT | |
 | Pydantic | MIT | |
 | Typer, Click | MIT, BSD-3-Clause | |
