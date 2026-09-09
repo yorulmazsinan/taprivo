@@ -7,11 +7,12 @@ from collections import deque
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from taprivo.core.events import Finger, Hand
+from taprivo.core.events import Finger, Hand, TapSource
 from taprivo.core.state import LastSpend, Mode
 
 TAPS_PER_MINUTE_WINDOW_MS = 60_000
 REASON_SUMMARY_LENGTH = 60
+TAPS_PER_SQUEEZE = 5
 
 
 class Session:
@@ -25,18 +26,29 @@ class Session:
         self.taps_per_hand_finger: dict[tuple[Hand, Finger], int] = {
             (hand, finger): 0 for hand in Hand for finger in Finger
         }
+        self.taps_per_source: dict[TapSource, int] = {source: 0 for source in TapSource}
         self.taps_total = 0
+        self.max_combo = 0
         self.spend_count = 0
         self.last_spend: LastSpend | None = None
         self._recent: deque[int] = deque()
 
-    def record_tap(self, hand: Hand, finger: Finger, ts_ms: int) -> None:
+    def record_tap(self, hand: Hand, finger: Finger, ts_ms: int, source: TapSource) -> None:
         self.taps_per_finger[finger] += 1
         self.taps_per_hand[hand] += 1
         self.taps_per_hand_finger[(hand, finger)] += 1
+        self.taps_per_source[source] += 1
         self.taps_total += 1
         self._recent.append(ts_ms)
         self._prune(ts_ms)
+
+    def record_combo(self, count: int) -> None:
+        self.max_combo = max(self.max_combo, count)
+
+    @property
+    def squeezes(self) -> int:
+        """Camera squeezes: the detector emits five taps for each one."""
+        return self.taps_per_source[TapSource.CAMERA] // TAPS_PER_SQUEEZE
 
     def taps_per_minute(self, now_ms: int) -> int:
         self._prune(now_ms)

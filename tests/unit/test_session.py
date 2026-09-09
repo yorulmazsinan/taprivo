@@ -1,12 +1,12 @@
-from taprivo.core.events import Finger, Hand
+from taprivo.core.events import Finger, Hand, TapSource
 from taprivo.core.session import Session
 
 
 def test_counters_and_taps_per_minute() -> None:
     session = Session(now_ms=lambda: 0, mode="simulator")
-    session.record_tap(Hand.LEFT, Finger.INDEX, 0)
-    session.record_tap(Hand.RIGHT, Finger.INDEX, 30_000)
-    session.record_tap(Hand.RIGHT, Finger.RING, 59_000)
+    session.record_tap(Hand.LEFT, Finger.INDEX, 0, TapSource.SIMULATOR)
+    session.record_tap(Hand.RIGHT, Finger.INDEX, 30_000, TapSource.SIMULATOR)
+    session.record_tap(Hand.RIGHT, Finger.RING, 59_000, TapSource.SIMULATOR)
     assert session.taps_total == 3
     assert session.taps_per_finger[Finger.INDEX] == 2
     assert session.taps_per_finger[Finger.THUMB] == 0
@@ -35,8 +35,8 @@ def test_duration_and_ids() -> None:
 
 def test_tap_exactly_sixty_seconds_old_is_pruned() -> None:
     session = Session(now_ms=lambda: 0, mode="simulator")
-    session.record_tap(Hand.RIGHT, Finger.INDEX, 0)
-    session.record_tap(Hand.RIGHT, Finger.INDEX, 1)
+    session.record_tap(Hand.RIGHT, Finger.INDEX, 0, TapSource.SIMULATOR)
+    session.record_tap(Hand.RIGHT, Finger.INDEX, 1, TapSource.SIMULATOR)
     assert session.taps_per_minute(59_999) == 2
     assert session.taps_per_minute(60_000) == 1
     assert session.taps_per_minute(60_001) == 0
@@ -45,3 +45,20 @@ def test_tap_exactly_sixty_seconds_old_is_pruned() -> None:
 def test_duration_never_negative() -> None:
     session = Session(now_ms=lambda: 5_000, mode="simulator")
     assert session.duration_seconds(1_000) == 0
+
+
+def test_squeezes_count_camera_taps_in_fives() -> None:
+    session = Session(now_ms=lambda: 0, mode="camera")
+    for index in range(12):
+        session.record_tap(Hand.LEFT, Finger.INDEX, index, TapSource.CAMERA)
+    session.record_tap(Hand.RIGHT, Finger.INDEX, 12, TapSource.SIMULATOR)
+    assert session.taps_total == 13
+    assert session.squeezes == 2
+    assert session.taps_per_source[TapSource.SIMULATOR] == 1
+
+
+def test_max_combo_keeps_the_highest_streak() -> None:
+    session = Session(now_ms=lambda: 0, mode="simulator")
+    for count in (1, 2, 3, 1):
+        session.record_combo(count)
+    assert session.max_combo == 3

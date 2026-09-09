@@ -103,6 +103,11 @@ class SqueezeConfig(_Frozen):
         return self
 
 
+class StatsConfig(_Frozen):
+    enabled: bool = True
+    path: str | None = None
+
+
 class Config(_Frozen):
     schema_version: int = 1
     energy: EnergyConfig = Field(default_factory=EnergyConfig)
@@ -112,6 +117,7 @@ class Config(_Frozen):
     hud: HudConfig = Field(default_factory=HudConfig)
     camera: CameraConfig = Field(default_factory=CameraConfig)
     squeeze: SqueezeConfig = Field(default_factory=SqueezeConfig)
+    stats: StatsConfig = Field(default_factory=StatsConfig)
 
     @property
     def endpoint_url(self) -> str:

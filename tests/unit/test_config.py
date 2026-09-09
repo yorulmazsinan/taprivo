@@ -159,3 +159,31 @@ def test_empty_combo_tiers_allowed(taprivo_home: Path) -> None:
     taprivo_home.mkdir(parents=True)
     (taprivo_home / "config.yaml").write_text("combo:\n  tiers: []\n")
     assert load_config().combo.tiers == ()
+
+
+def test_stats_defaults_to_enabled_with_the_home_path(taprivo_home: Path) -> None:
+    from taprivo import paths
+
+    cfg = load_config()
+    assert cfg.stats.enabled is True
+    assert cfg.stats.path is None
+    assert paths.stats_path(cfg.stats.path) == taprivo_home / "stats.sqlite"
+
+
+def test_stats_can_be_disabled_and_moved(taprivo_home: Path) -> None:
+    from taprivo import paths
+
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text(
+        "stats:\n  enabled: false\n  path: ~/elsewhere/stats.sqlite\n"
+    )
+    cfg = load_config()
+    assert cfg.stats.enabled is False
+    assert paths.stats_path(cfg.stats.path) == Path.home() / "elsewhere" / "stats.sqlite"
+
+
+def test_unknown_stats_key_rejected(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text("stats:\n  keep_days: 30\n")
+    with pytest.raises(ConfigError, match="keep_days"):
+        load_config()

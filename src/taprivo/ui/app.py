@@ -5,12 +5,13 @@ from __future__ import annotations
 import logging
 import sys
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication
 
 from taprivo import paths
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
+from taprivo.core.stats_store import StatsStore
 from taprivo.logging_setup import setup_logging
 from taprivo.mcp.server import McpServerThread
 from taprivo.simulator import Simulator
@@ -23,6 +24,8 @@ from taprivo.vision.controller import VisionController
 
 log = logging.getLogger(__name__)
 
+HEARTBEAT_MS = 60_000
+
 
 def run_app(config: Config, *, start_simulator: bool, open_camera: bool = False) -> int:
     setup_logging()
@@ -32,7 +35,8 @@ def run_app(config: Config, *, start_simulator: bool, open_camera: bool = False)
         return 1
     try:
         token = paths.read_or_create_token()
-        engine = EnergyEngine(config)
+        store = StatsStore(paths.stats_path(config.stats.path)) if config.stats.enabled else None
+        engine = EnergyEngine(config, sink=store)
         simulator = Simulator(engine, config)
         controller = VisionController(engine, config)
         server = McpServerThread(engine, config, token)
@@ -64,6 +68,10 @@ def run_app(config: Config, *, start_simulator: bool, open_camera: bool = False)
             )
             connect_engine(engine, engine_signals)
             window.on_snapshot(engine.snapshot())
+            heartbeat = QTimer(window)
+            heartbeat.setInterval(HEARTBEAT_MS)
+            heartbeat.timeout.connect(engine.heartbeat)
+            heartbeat.start()
             if start_simulator:
                 simulator.start()
             window.show()
@@ -75,7 +83,10 @@ def run_app(config: Config, *, start_simulator: bool, open_camera: bool = False)
             code = qt_app.exec()
             return int(code)
         finally:
+            engine.close()
             controller.stop()
             server.stop()
+            if store is not None:
+                store.close()
     finally:
         lock.release()
