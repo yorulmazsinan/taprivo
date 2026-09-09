@@ -5,6 +5,10 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0b7] - 2026-09-09
+
+Beta preview: Claude Code usage limits in the HUD.
+
 ### Added
 - Claude Code usage card in the HUD: the model, how full the context window is, the five-hour and seven-day usage limits with the time until each one resets, and the session's cost and elapsed time. The limits come from a Pro or Max subscription; on an API key the card says they are not available. A report older than 90 seconds dims the card and says how long ago it arrived.
 - `taprivo setup claude --statusline`, and a **Show Claude Code usage in the HUD (status line)** checkbox on the Setup window's Claude Code row, install `~/.config/taprivo/statusline.sh` (mode 0700) and point Claude Code's `statusLine` setting at it. `~/.claude/settings.json` is backed up first and every other setting is kept. A status line that was already configured is saved to `statusline-chain.json`, still runs, and its output is printed before Taprivo's; `taprivo remove claude` restores it and deletes both files.
@@ -121,7 +125,8 @@ macOS package yet.
 - No camera support yet; the balance resets when the app quits.
 - Only Claude Code is tested as an MCP client.
 
-[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b6...HEAD
+[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b7...HEAD
+[0.1.0b7]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b7
 [0.1.0b6]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b6
 [0.1.0b5]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b5
 [0.1.0b4]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b4

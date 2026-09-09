@@ -4,5 +4,5 @@ import taprivo
 
 
 def test_version_matches_package_metadata() -> None:
-    assert taprivo.__version__ == "0.1.0b6"
-    assert version("taprivo") == "0.1.0b6"
+    assert taprivo.__version__ == "0.1.0b7"
+    assert version("taprivo") == "0.1.0b7"

@@ -1,6 +1,6 @@
 [project]
 name = "taprivo"
-version = "0.1.0b6"
+version = "0.1.0b7"
 description = "Turn finger taps into a playful Motion Energy budget for AI coding agents."
 readme = "README.md"
 license = "Apache-2.0"
