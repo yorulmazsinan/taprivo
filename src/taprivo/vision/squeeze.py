@@ -53,6 +53,21 @@ class SqueezeState:
     hands: dict[Hand, HandState]
 
 
+def hand_in_frame(frame: HandFrame) -> bool:
+    """Whether every landmark of `frame` lies inside the camera frame.
+
+    MediaPipe extrapolates landmark positions for fingers it can no longer see,
+    such as when a hand slides out past the bottom edge of the frame. The
+    extrapolated positions can push the openness feature well above the real
+    "open" level, so a hand leaving the frame can look to the detector like it
+    just opened again and register a false squeeze cycle. Landmarks are
+    normalised to `[0.0, 1.0]`, so any landmark outside that range on `x` or
+    `y` means the hand is (at least partly) out of frame and should be
+    treated as not visible.
+    """
+    return all(0.0 <= x <= 1.0 and 0.0 <= y <= 1.0 for x, y, _ in frame.landmarks)
+
+
 @dataclass
 class _Track:
     phase: Phase = "unknown"
@@ -92,7 +107,7 @@ class SqueezeDetector:
         )
 
     def process(self, hands: tuple[HandFrame, ...], ts_ms: int) -> list[TapEvent]:
-        present = {frame.hand: frame for frame in hands}
+        present = {frame.hand: frame for frame in hands if hand_in_frame(frame)}
         events: list[TapEvent] = []
         for hand, track in self._tracks.items():
             frame = present.get(hand)
