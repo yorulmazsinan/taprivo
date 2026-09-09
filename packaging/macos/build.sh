@@ -136,10 +136,17 @@ List the identities in your keychain with: security find-identity -v -p codesign
 
 cmd_notarize() {
     require_arm64
-    [ -n "${TAPRIVO_NOTARY_PROFILE:-}" ] || die \
-        "TAPRIVO_NOTARY_PROFILE is not set. Create a keychain profile once with:
-  xcrun notarytool store-credentials taprivo-notary --key <AuthKey.p8> --key-id <ID> --issuer <UUID>
-then export TAPRIVO_NOTARY_PROFILE=taprivo-notary"
+    if [ -n "${TAPRIVO_NOTARY_KEY:-}" ]; then
+        [ -n "${TAPRIVO_NOTARY_KEY_ID:-}" ] && [ -n "${TAPRIVO_NOTARY_ISSUER:-}" ] || die \
+            "TAPRIVO_NOTARY_KEY needs TAPRIVO_NOTARY_KEY_ID and TAPRIVO_NOTARY_ISSUER as well"
+        NOTARY_AUTH=(--key "$TAPRIVO_NOTARY_KEY" --key-id "$TAPRIVO_NOTARY_KEY_ID" --issuer "$TAPRIVO_NOTARY_ISSUER")
+    elif [ -n "${TAPRIVO_NOTARY_PROFILE:-}" ]; then
+        NOTARY_AUTH=("${NOTARY_AUTH[@]}")
+    else
+        die "Set TAPRIVO_NOTARY_PROFILE (a keychain profile from 'xcrun notarytool store-credentials')
+or TAPRIVO_NOTARY_KEY, TAPRIVO_NOTARY_KEY_ID and TAPRIVO_NOTARY_ISSUER (an App Store Connect API key file).
+The key-file form also works in shells that cannot read the login keychain."
+    fi
     require_cmd xcrun "Install the Xcode Command Line Tools: xcode-select --install"
     require_app
 
@@ -152,7 +159,7 @@ then export TAPRIVO_NOTARY_PROFILE=taprivo-notary"
     ditto -c -k --keepParent "$APP" "$zip"
 
     log "Submitting to the notary service (this can take a few minutes)"
-    xcrun notarytool submit "$zip" --keychain-profile "$TAPRIVO_NOTARY_PROFILE" --wait
+    xcrun notarytool submit "$zip" "${NOTARY_AUTH[@]}" --wait
 
     log "Stapling the ticket"
     xcrun stapler staple "$APP"
