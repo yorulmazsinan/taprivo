@@ -25,10 +25,28 @@ class EnergyConfig(_Frozen):
     max_energy: int = Field(default=10000, ge=1)
 
 
+class ComboTier(_Frozen):
+    at: int = Field(ge=1, description="Combo count at which this multiplier starts.")
+    multiplier: float = Field(ge=1.0)
+
+
 class ComboConfig(_Frozen):
     enabled: bool = True
     timeout_ms: int = Field(default=600, ge=1)
-    energy_multiplier_enabled: bool = False
+    energy_multiplier_enabled: bool = True
+    tiers: tuple[ComboTier, ...] = (
+        ComboTier(at=10, multiplier=1.5),
+        ComboTier(at=25, multiplier=2.0),
+    )
+
+    @model_validator(mode="after")
+    def _tiers_ascend(self) -> ComboConfig:
+        thresholds = [tier.at for tier in self.tiers]
+        if thresholds != sorted(set(thresholds)):
+            raise ValueError(
+                f"combo.tiers must be in ascending order by 'at' with no repeats (got {thresholds})"
+            )
+        return self
 
 
 class ServerConfig(_Frozen):

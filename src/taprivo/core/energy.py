@@ -89,7 +89,12 @@ class EnergyEngine:
 
     def _start_session_locked(self) -> None:
         self._session = Session(self._now_ms, self._mode)
-        self._combo = ComboTracker(self._config.combo.timeout_ms, self._config.combo.enabled)
+        self._combo = ComboTracker(
+            self._config.combo.timeout_ms,
+            self._config.combo.enabled,
+            self._config.combo.tiers,
+            self._config.combo.energy_multiplier_enabled,
+        )
         self._gross = 0
         self._overflow = 0
         self._spent = 0
@@ -108,12 +113,12 @@ class EnergyEngine:
         with self._lock:
             if event.session_id != self._session.session_id:
                 return TapResult(False, self._snapshot_locked())
-            per_tap = self._config.energy.energy_per_tap
+            self._combo.record(event.timestamp_monotonic_ms)
+            per_tap = round(self._config.energy.energy_per_tap * self._combo.multiplier)
             room = max(self._config.energy.max_energy - self._available_locked(), 0)
             credited = min(per_tap, room)
             self._gross += per_tap
             self._overflow += per_tap - credited
-            self._combo.record(event.timestamp_monotonic_ms)
             self._session.record_tap(event.hand, event.finger, event.timestamp_monotonic_ms)
             snapshot = self._snapshot_locked()
         log.debug(
@@ -243,6 +248,7 @@ class EnergyEngine:
             max_energy=self._config.energy.max_energy,
             energy_per_tap=self._config.energy.energy_per_tap,
             combo=self._combo.count,
+            combo_multiplier=self._combo.multiplier,
             taps_total=self._session.taps_total,
             taps_per_finger=dict(self._session.taps_per_finger),
             taps_per_hand=dict(self._session.taps_per_hand),

@@ -11,7 +11,8 @@ def test_defaults(taprivo_home: Path) -> None:
     assert cfg.energy.energy_per_tap == 10
     assert cfg.energy.max_energy == 10000
     assert cfg.combo.timeout_ms == 600
-    assert cfg.combo.energy_multiplier_enabled is False
+    assert cfg.combo.energy_multiplier_enabled is True
+    assert [(tier.at, tier.multiplier) for tier in cfg.combo.tiers] == [(10, 1.5), (25, 2.0)]
     assert cfg.simulator.max_taps_per_second == 12
     assert cfg.server.port == 32145
     assert cfg.server.max_reason_length == 200
@@ -124,3 +125,37 @@ def test_tap_cap_must_be_at_least_one(taprivo_home: Path) -> None:
     (taprivo_home / "config.yaml").write_text("simulator:\n  max_taps_per_second: 0\n")
     with pytest.raises(ConfigError, match="max_taps_per_second"):
         load_config()
+
+
+def test_combo_tiers_override(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text(
+        "combo:\n  tiers:\n    - {at: 5, multiplier: 1.25}\n    - {at: 40, multiplier: 3.0}\n"
+    )
+    cfg = load_config()
+    assert [(tier.at, tier.multiplier) for tier in cfg.combo.tiers] == [(5, 1.25), (40, 3.0)]
+
+
+def test_combo_tiers_must_ascend(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text(
+        "combo:\n  tiers:\n    - {at: 25, multiplier: 2.0}\n    - {at: 10, multiplier: 1.5}\n"
+    )
+    with pytest.raises(ConfigError, match="ascending"):
+        load_config()
+
+
+def test_combo_tier_bounds(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text("combo:\n  tiers:\n    - {at: 0, multiplier: 1.5}\n")
+    with pytest.raises(ConfigError, match="at"):
+        load_config()
+    (taprivo_home / "config.yaml").write_text("combo:\n  tiers:\n    - {at: 5, multiplier: 0.5}\n")
+    with pytest.raises(ConfigError, match="multiplier"):
+        load_config()
+
+
+def test_empty_combo_tiers_allowed(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text("combo:\n  tiers: []\n")
+    assert load_config().combo.tiers == ()

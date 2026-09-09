@@ -7,18 +7,23 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from taprivo.config import Config, EnergyConfig
+from taprivo.config import ComboConfig, ComboTier, Config, EnergyConfig
 from taprivo.core.energy import EnergyEngine, SpendError, SpendRequest
 from taprivo.core.events import Finger, Hand, TapEvent, TapSource
 
 
-def tap(engine: EnergyEngine, ts: int = 0, finger: Finger = Finger.INDEX) -> None:
+def tap(
+    engine: EnergyEngine,
+    ts: int = 0,
+    finger: Finger = Finger.INDEX,
+    hand: Hand = Hand.RIGHT,
+) -> None:
     engine.apply_tap(
         TapEvent(
-            event_id=f"e{ts}",
+            event_id=f"e{ts}-{hand}-{finger}",
             session_id=engine.session_id,
-            hand=Hand.RIGHT,
-            hand_id="kbd-right",
+            hand=hand,
+            hand_id=f"kbd-{hand.value}",
             finger=finger,
             timestamp_monotonic_ms=ts,
             displacement=0.04,
@@ -41,7 +46,23 @@ def spend(engine: EnergyEngine, amount: int, request_id: str = "r1", **kw: objec
 
 
 def make_engine(max_energy: int = 10000) -> EnergyEngine:
-    cfg = Config(energy=EnergyConfig(energy_per_tap=10, max_energy=max_energy))
+    """An engine with the combo multiplier off, so every tap credits exactly 10."""
+    cfg = Config(
+        energy=EnergyConfig(energy_per_tap=10, max_energy=max_energy),
+        combo=ComboConfig(energy_multiplier_enabled=False),
+    )
+    return EnergyEngine(cfg, now_ms=lambda: 0)
+
+
+def make_multiplier_engine(max_energy: int = 10000) -> EnergyEngine:
+    cfg = Config(
+        energy=EnergyConfig(energy_per_tap=10, max_energy=max_energy),
+        combo=ComboConfig(
+            timeout_ms=600,
+            energy_multiplier_enabled=True,
+            tiers=(ComboTier(at=10, multiplier=1.5), ComboTier(at=25, multiplier=2.0)),
+        ),
+    )
     return EnergyEngine(cfg, now_ms=lambda: 0)
 
 
@@ -71,7 +92,7 @@ def test_tap_from_old_session_is_ignored() -> None:
     engine.reset_session()
     result = engine.apply_tap(
         TapEvent(
-            "e", old, Hand.RIGHT, "sim-right", Finger.INDEX, 0, 0.04, 0.6, 1.0, TapSource.SIMULATOR
+            "e", old, Hand.RIGHT, "kbd-right", Finger.INDEX, 0, 0.04, 0.6, 1.0, TapSource.SIMULATOR
         )
     )
     assert result.accepted is False
@@ -271,3 +292,75 @@ def test_available_identity_holds(ops: list[Op]) -> None:
         s = engine.snapshot()
         assert s.available == s.gross_generated - s.overflow - s.spent
         assert 0 <= s.available <= 800
+
+
+def test_combo_tiers_scale_each_tap() -> None:
+    engine = make_multiplier_engine()
+    expected = 0
+    for count in range(1, 31):
+        tap(engine, ts=count * 100)
+        expected += 10 if count < 10 else 15 if count < 25 else 20
+        snap = engine.snapshot()
+        assert snap.available == expected, count
+        assert snap.combo == count
+    assert engine.snapshot().combo_multiplier == 2.0
+
+
+def test_combo_timeout_drops_back_to_the_base_rate() -> None:
+    engine = make_multiplier_engine()
+    for count in range(1, 13):
+        tap(engine, ts=count * 100)
+    assert engine.snapshot().combo_multiplier == 1.5
+    before = engine.snapshot().available
+    tap(engine, ts=100_000)
+    snap = engine.snapshot()
+    assert snap.combo == 1
+    assert snap.combo_multiplier == 1.0
+    assert snap.available == before + 10
+
+
+def test_multiplier_disabled_keeps_every_tap_at_ten() -> None:
+    engine = make_engine()
+    for count in range(1, 31):
+        tap(engine, ts=count * 100)
+    snap = engine.snapshot()
+    assert snap.available == 300
+    assert snap.combo == 30
+    assert snap.combo_multiplier == 1.0
+
+
+def test_multiplied_tap_overflows_against_the_cap() -> None:
+    engine = make_multiplier_engine(max_energy=145)
+    for count in range(1, 12):
+        tap(engine, ts=count * 100)
+    snap = engine.snapshot()
+    # Nine taps at 10 plus two at 15: still below the cap, nothing lost.
+    assert snap.available == 120 and snap.overflow == 0
+    for count in range(12, 15):
+        tap(engine, ts=count * 100)
+    snap = engine.snapshot()
+    assert snap.available == 145
+    assert snap.gross_generated == 165
+    assert snap.overflow == 20
+
+
+def test_per_hand_counters_track_both_hands() -> None:
+    engine = make_engine()
+    tap(engine, ts=1, hand=Hand.LEFT, finger=Finger.PINKY)
+    tap(engine, ts=2, hand=Hand.LEFT, finger=Finger.PINKY)
+    tap(engine, ts=3, hand=Hand.RIGHT, finger=Finger.INDEX)
+    snap = engine.snapshot()
+    assert snap.taps_per_hand == {Hand.LEFT: 2, Hand.RIGHT: 1}
+    assert snap.taps_per_hand_finger[(Hand.LEFT, Finger.PINKY)] == 2
+    assert snap.taps_per_hand_finger[(Hand.RIGHT, Finger.INDEX)] == 1
+    assert snap.taps_per_hand_finger[(Hand.RIGHT, Finger.PINKY)] == 0
+    assert snap.taps_per_finger[Finger.PINKY] == 2
+
+
+def test_reset_clears_per_hand_counters() -> None:
+    engine = make_engine()
+    tap(engine, ts=1, hand=Hand.LEFT)
+    engine.reset_session()
+    snap = engine.snapshot()
+    assert snap.taps_per_hand == {Hand.LEFT: 0, Hand.RIGHT: 0}
+    assert snap.combo_multiplier == 1.0

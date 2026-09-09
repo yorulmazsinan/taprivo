@@ -124,6 +124,8 @@ def build_server(engine: EnergyEngine, config: Config) -> MCPServer:
             taps_per_finger={finger.value: count for finger, count in s.taps_per_finger.items()},
             taps_per_minute=s.taps_per_minute,
             combo=s.combo,
+            combo_multiplier=s.combo_multiplier,
+            taps_per_hand={hand.value: count for hand, count in s.taps_per_hand.items()},
             spend_count=s.spend_count,
             last_spend=last,
             session_duration_seconds=s.session_duration_seconds,
