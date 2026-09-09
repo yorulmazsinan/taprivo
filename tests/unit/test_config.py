@@ -80,6 +80,24 @@ def test_camera_override(taprivo_home: Path) -> None:
     assert cfg.squeeze.cooldown_ms == 500
 
 
+def test_inverted_squeeze_levels_rejected(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text(
+        "squeeze:\n  open_level: 0.40\n  closed_level: 0.80\n"
+    )
+    with pytest.raises(ConfigError, match=r"open_level.*closed_level"):
+        load_config()
+
+
+def test_equal_squeeze_levels_rejected(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text(
+        "squeeze:\n  open_level: 0.50\n  closed_level: 0.50\n"
+    )
+    with pytest.raises(ConfigError, match=r"open_level.*closed_level"):
+        load_config()
+
+
 def test_hud_theme_defaults_to_system(taprivo_home: Path) -> None:
     cfg = load_config()
     assert cfg.hud.theme == "system"

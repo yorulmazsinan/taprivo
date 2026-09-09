@@ -145,6 +145,31 @@ def test_stale_when_no_frames_arrive(engine: EnergyEngine) -> None:
     worker.stop()
 
 
+def test_stats_decay_to_zero_when_frames_stop(engine: EnergyEngine) -> None:
+    clock = [0]
+    frames = steady(0, 400)
+    script, hands = hand_script(frames)
+    source = ScriptedSource(script)
+    worker = VisionWorker(
+        engine,
+        SqueezeDetector(SqueezeParams(), lambda: engine.session_id),
+        lambda: source,
+        lambda: ScriptedTracker(hands),
+        now_ms=lambda: clock[0],
+    )
+    worker.start()
+    assert worker.wait_started(2.0)
+    time.sleep(0.4)  # script consumed; stats reflect the recent traffic
+    before = worker.stats()
+    assert before.processed_fps > 0 and before.captured_fps > 0
+    clock[0] = 5000  # 5 s "later", well past the 2 s StatsWindow, no new frames
+    time.sleep(0.2)
+    after = worker.stats()
+    assert after.processed_fps == 0
+    assert after.captured_fps == 0
+    worker.stop()
+
+
 def test_open_failure_surfaces_error_and_inactive(engine: EnergyEngine) -> None:
     source = ScriptedSource([], fail_open=True)
     tracker_calls: list[ScriptedTracker] = []

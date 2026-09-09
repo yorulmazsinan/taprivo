@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from taprivo import paths
 
@@ -73,6 +73,15 @@ class SqueezeConfig(_Frozen):
     max_cycle_ms: int = Field(default=2500, ge=100)
     cooldown_ms: int = Field(default=300, ge=0)
     frame_gap_reset_ms: int = Field(default=250, ge=50)
+
+    @model_validator(mode="after")
+    def _open_above_closed(self) -> SqueezeConfig:
+        if self.open_level <= self.closed_level:
+            raise ValueError(
+                "squeeze.open_level must be greater than squeeze.closed_level "
+                f"(got open_level={self.open_level}, closed_level={self.closed_level})"
+            )
+        return self
 
 
 class Config(_Frozen):

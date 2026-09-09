@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
-from taprivo.core.events import Finger
+from taprivo.core.events import Finger, Hand
 from taprivo.vision.frames import HandFrame
 from taprivo.vision.squeeze import Levels, SqueezeDetector, SqueezeParams
 
@@ -50,7 +50,7 @@ class _Progress:
     total: int = 0
     open_samples: list[float] = field(default_factory=list)
     fist_samples: list[float] = field(default_factory=list)
-    cycles: int = 0
+    cycles_by_hand: dict[Hand, int] = field(default_factory=dict)
     visibility_failed: bool = False
 
 
@@ -145,7 +145,11 @@ class CalibrationSession:
                 detector = self._squeeze_detector
                 assert detector is not None
                 events = detector.process(hands, ts_ms)
-                s.cycles += len(events) // 5
+                per_hand_events: dict[Hand, int] = {}
+                for event in events:
+                    per_hand_events[event.hand] = per_hand_events.get(event.hand, 0) + 1
+                for hand, count in per_hand_events.items():
+                    s.cycles_by_hand[hand] = s.cycles_by_hand.get(hand, 0) + count // 5
                 if elapsed >= SQUEEZE_MS:
                     self._finish()
                     self._enter("done", ts_ms)
@@ -190,6 +194,10 @@ class CalibrationSession:
 
     def _finish(self) -> None:
         s = self._s
+        # The ok-criterion looks at the most active hand's cycle count, not the
+        # sum across hands: a user who follows "squeeze N times" with both
+        # hands should still land in range, not double-count into "too many".
+        cycles = max(s.cycles_by_hand.values(), default=0)
         open_level = (
             statistics.median(s.open_samples) if s.open_samples else self._params.open_level
         )
@@ -198,7 +206,7 @@ class CalibrationSession:
         )
         status: Status = (
             "ok"
-            if MIN_CYCLES <= s.cycles <= MAX_CYCLES and open_level - closed_level >= MIN_SPAN
+            if MIN_CYCLES <= cycles <= MAX_CYCLES and open_level - closed_level >= MIN_SPAN
             else "uncalibrated"
         )
         levels = (
@@ -206,4 +214,4 @@ class CalibrationSession:
             if status == "ok"
             else Levels(self._params.open_level, self._params.closed_level)
         )
-        self._result = CalibrationResult(levels=levels, cycles=s.cycles, status=status)
+        self._result = CalibrationResult(levels=levels, cycles=cycles, status=status)
