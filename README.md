@@ -17,8 +17,8 @@ game mechanic, not API tokens or credits.
 
 ## What it does
 
-- Every valid tap adds 10 Motion Energy to a session balance (cap 10,000); a camera squeeze counts as five taps (50 energy).
-- A small always-on-top HUD (dark or light theme) shows energy, per-finger counts, combo, rate, camera and MCP status.
+- Every tap adds 10 Motion Energy (× combo multiplier, up to 2×) to a session balance (cap 10,000); a camera squeeze counts as five taps (50 energy).
+- A small always-on-top HUD (dark or light theme) shows energy, a chip per drumming key on each hand, combo and multiplier, rate, camera and MCP status.
 - A local MCP server on `http://127.0.0.1:32145/mcp` exposes `get_energy`,
   `spend_energy`, `get_stats` and `get_session`.
 - Claude Code reads the balance and spends a suitable amount before a
@@ -58,8 +58,11 @@ uv sync
 uv run taprivo simulate
 ```
 
-The HUD opens with the simulator running. Press `1`–`5` to tap thumb, index,
-middle, ring and pinky. Each press adds 10 energy.
+The HUD opens with keyboard mode running and both hands on the number row.
+The left hand drums `1` `2` `3` `4` (pinky to index) and the right hand
+`7` `8` `9` `0` (index to pinky). Each press adds 10 energy; keep the taps
+coming and the combo multiplier lifts that to 1.5× at 10 consecutive taps and
+2× at 25. Taps above 12 per second are ignored, so a held key earns nothing.
 
 With a camera: click **Open Camera** in the HUD or run `uv run taprivo calibrate` — see [Camera](#camera).
 
@@ -118,7 +121,7 @@ Keep the whole hand inside the frame; a hand partly out of view is ignored.
 |---|---|
 | `taprivo` | Open the HUD |
 | `taprivo --version` | Print the version |
-| `taprivo simulate` | Open the HUD with the keyboard simulator running |
+| `taprivo simulate` | Open the HUD with keyboard mode running |
 | `taprivo camera list [--json]` | List camera devices |
 | `taprivo calibrate` | Open the Camera window for calibration |
 | `taprivo status [--json]` | Balance, tracking state, camera fps and endpoint of the running app |
@@ -138,8 +141,15 @@ shipped defaults (`src/taprivo/resources/default.yaml`). Common keys:
 energy:
   energy_per_tap: 10
   max_energy: 10000
+combo:
+  energy_multiplier_enabled: true
+  tiers:            # combo tiers: consecutive taps → energy multiplier
+    - {at: 10, multiplier: 1.5}
+    - {at: 25, multiplier: 2.0}
 server:
   port: 32145
+simulator:
+  max_taps_per_second: 12   # sliding one-second cap, both hands together
 hud:
   always_on_top: true
   opacity: 0.92
@@ -184,12 +194,12 @@ Camera (MediaPipe hand landmarks, squeeze detector) / keyboard simulator
 
 | Area | Status |
 |---|---|
-| Keyboard simulator | implemented |
+| Keyboard drumming (two hands, combo multiplier) | implemented |
 | HUD | implemented |
 | MCP tools and Claude Code setup | implemented |
 | Camera squeeze detection (two hands) | implemented (beta) |
 | Calibration | implemented (beta) |
-| Rhythm, combo bonuses | planned |
+| Rhythm / BPM | planned |
 | Persistent stats (SQLite) | planned |
 | Other agents (Cursor, Codex, …) | planned |
 

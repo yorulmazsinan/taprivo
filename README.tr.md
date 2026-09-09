@@ -17,8 +17,8 @@ veya kredi değildir.
 
 ## Ne yapar?
 
-- Her geçerli vuruş oturum bakiyesine 10 Motion Energy ekler (üst sınır 10.000); bir kamera sıkması beş vuruş sayılır (50 enerji).
-- Küçük, her zaman üstte duran HUD (koyu veya açık tema) enerjiyi, parmak sayımlarını, combo'yu, hızı, kamera ve MCP durumunu gösterir.
+- Her vuruş oturum bakiyesine 10 Motion Energy ekler (× combo çarpanı, en çok 2×; üst sınır 10.000); bir kamera sıkması beş vuruş sayılır (50 enerji).
+- Küçük, her zaman üstte duran HUD (koyu veya açık tema) enerjiyi, her elin tuş sayımlarını, combo'yu ve çarpanını, hızı, kamera ve MCP durumunu gösterir.
 - `http://127.0.0.1:32145/mcp` adresindeki yerel MCP sunucusu `get_energy`,
   `spend_energy`, `get_stats` ve `get_session` araçlarını sunar.
 - Claude Code, seçtiğiniz talimat dosyasına uyarak büyük bir uygulama
@@ -57,8 +57,11 @@ uv sync
 uv run taprivo simulate
 ```
 
-HUD simülatör açık olarak gelir. `1`–`5` tuşları başparmak, işaret, orta,
-yüzük ve serçe parmağı vurur. Her basış 10 enerji ekler.
+HUD klavye modu açık olarak gelir; iki el de rakam sırasındadır. Sol el
+`1` `2` `3` `4` (serçeden işarete), sağ el `7` `8` `9` `0` (işaretten
+serçeye) tuşlarına vurur. Her basış 10 enerji ekler; vuruşlar kesilmezse
+combo çarpanı 10. ardışık vuruşta 1,5×, 25. vuruşta 2× olur. Saniyede 12'yi
+aşan vuruşlar sayılmaz; basılı tutulan tuş enerji kazandırmaz.
 
 Kamerayla: HUD'daki **Open Camera** düğmesine tıklayın veya `uv run taprivo calibrate` çalıştırın — bkz. [Kamera](#kamera).
 
@@ -119,7 +122,7 @@ Elin tamamını kadrajda tutun; kısmen görünen el yok sayılır.
 |---|---|
 | `taprivo` | HUD'u aç |
 | `taprivo --version` | Sürümü yazdır |
-| `taprivo simulate` | HUD'u klavye simülatörü açık olarak başlat |
+| `taprivo simulate` | HUD'u klavye modu açık olarak başlat |
 | `taprivo camera list [--json]` | Kamera cihazlarını listele |
 | `taprivo calibrate` | Kalibrasyon için Kamera penceresini aç |
 | `taprivo status [--json]` | Çalışan uygulamanın bakiyesi, takip durumu, kamera fps'i ve uç noktası |
@@ -139,8 +142,15 @@ gelen varsayılanlarla (`src/taprivo/resources/default.yaml`) birleştirilir; ku
 energy:
   energy_per_tap: 10
   max_energy: 10000
+combo:
+  energy_multiplier_enabled: true
+  tiers:            # combo kademeleri: ardışık vuruş → enerji çarpanı
+    - {at: 10, multiplier: 1.5}
+    - {at: 25, multiplier: 2.0}
 server:
   port: 32145
+simulator:
+  max_taps_per_second: 12   # iki eli birlikte sayan bir saniyelik kayan sınır
 hud:
   always_on_top: true
   opacity: 0.92
@@ -186,12 +196,12 @@ Kamera (MediaPipe el landmark'ları, sıkma algılayıcı) / klavye simülatör�
 
 | Alan | Durum |
 |---|---|
-| Klavye simülatörü | uygulandı |
+| Klavyeyle davul (iki el, combo çarpanı) | uygulandı |
 | HUD | uygulandı |
 | MCP araçları ve Claude Code kurulumu | uygulandı |
 | Kamerayla sıkma algılama (iki el) | uygulandı (beta) |
 | Kalibrasyon | uygulandı (beta) |
-| Ritim, combo bonusları | planlandı |
+| Ritim / BPM | planlandı |
 | Kalıcı istatistikler (SQLite) | planlandı |
 | Diğer ajanlar (Cursor, Codex, …) | planlandı |
 
