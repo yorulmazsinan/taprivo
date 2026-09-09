@@ -11,7 +11,7 @@ tuşlara basın), Motion Energy biriktirin ve Claude Code bu bakiyeyi MCP
 kareleri cihazınızdan çıkmaz. Motion Energy bir oyun mekaniğidir; API token'ı
 veya kredi değildir.
 
-> **Durum: beta sürecinde (sonraki ön sürüm: 0.1.0b1).** Kamerayla sıkma
+> **Durum: beta (0.1.0b1).** Kamerayla sıkma
 > algılama ve kalibrasyon, klavye simülatörünün yanında kullanılabilir. Apple
 > Silicon macOS üzerinde dahili FaceTime kamerayla test edilmiştir.
 

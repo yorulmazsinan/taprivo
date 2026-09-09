@@ -10,7 +10,7 @@ Motion Energy, and let Claude Code read and spend it through MCP. Hand tracking
 runs locally on your device; camera frames never leave it. Motion Energy is a
 game mechanic, not API tokens or credits.
 
-> **Status: beta in progress (next pre-release: 0.1.0b1).** Camera-based
+> **Status: beta (0.1.0b1).** Camera-based
 > squeeze detection with calibration is available alongside the keyboard
 > simulator. Tested on macOS on Apple Silicon with the built-in FaceTime
 > camera.

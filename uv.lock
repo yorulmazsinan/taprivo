@@ -1204,7 +1204,7 @@ wheels = [
 
 [[package]]
 name = "taprivo"
-version = "0.1.0a1"
+version = "0.1.0b1"
 source = { editable = "." }
 dependencies = [
     { name = "httpx2" },
