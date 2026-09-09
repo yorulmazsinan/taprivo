@@ -17,6 +17,7 @@ from PySide6.QtGui import (
     QPainterPath,
     QPen,
     QPixmap,
+    QShowEvent,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -104,6 +105,7 @@ class CameraWindow(QWidget):
         self._session: CalibrationSession | None = None
         self._result: CalibrationResult | None = None
         self._last_error = ""
+        self._was_running = False
         self.signals = signals
         self.signals.preview.connect(self.on_preview, Qt.ConnectionType.QueuedConnection)
         self.signals.devices.connect(self.on_devices, Qt.ConnectionType.QueuedConnection)
@@ -336,6 +338,7 @@ class CameraWindow(QWidget):
     @Slot()
     def stop_camera(self) -> None:
         self._controller.stop()
+        self._was_running = False
         self._session = None
         self.preview_label.setPixmap(QPixmap())
         self.preview_label.setText("Camera off")
@@ -344,6 +347,7 @@ class CameraWindow(QWidget):
             self.meters[hand].setValue(0.0)
             self.meters[hand].setState("Not seen")
             self.state_labels[hand].setText("Not seen")
+        self.export_button.setEnabled(False)
         self._render_status()
         self._show_idle_hint()
 
@@ -359,7 +363,7 @@ class CameraWindow(QWidget):
         self.result_cycles_label.setText("")
         self.result_status_label.setText("")
         self.apply_button.setEnabled(False)
-        self.export_button.setEnabled(True)
+        self.export_button.setEnabled(False)
         return self._session
 
     def show_result(self, result: CalibrationResult) -> None:
@@ -373,6 +377,7 @@ class CameraWindow(QWidget):
         self.countdown_label.setText("")
         self.calibration_progress.setValue(100)
         self.apply_button.setEnabled(True)
+        self.export_button.setEnabled(True)
 
     @Slot()
     def apply_calibration(self) -> None:
@@ -458,8 +463,9 @@ class CameraWindow(QWidget):
         text = f"Camera: {STATUS_TEXT.get(status, status)}"
         if self._controller.running:
             text += f"  {stats.processed_fps:.0f} fps  hand {stats.detection_ratio * 100:.0f}%"
-        if self._last_error:
-            text += f"  ({self._last_error})"
+        error = self._controller.error or self._last_error
+        if error:
+            text += f"  ({error})"
         return text
 
     def _render_status(self) -> None:
@@ -479,6 +485,15 @@ class CameraWindow(QWidget):
 
     def _tick(self) -> None:
         try:
+            running = self._controller.running
+            if self._was_running and not running:
+                # The worker died on its own (an uncaught exception in the
+                # capture loop) rather than via an explicit Stop click: run
+                # the same cleanup stop_camera() does, once, so the preview
+                # and meters do not freeze on stale state.
+                self.stop_camera()
+                return
+            self._was_running = running
             self._render_status()
             session = self._session
             if session is None:
@@ -500,3 +515,11 @@ class CameraWindow(QWidget):
         self._timer.stop()
         self.stop_camera()
         super().closeEvent(event)
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 (Qt override)
+        super().showEvent(event)
+        # app.py constructs one CameraWindow and reuses it for every
+        # "Open Camera" click; closeEvent stops the tick timer, so it must be
+        # restarted here or the calibration UI is dead after a reopen.
+        if not self._timer.isActive():
+            self._timer.start()
