@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Literal
 
-from taprivo.core.events import Finger
+from taprivo.core.events import Finger, Hand
 
 TrackingStatus = Literal["inactive", "simulator", "tracking", "stale", "no_signal"]
 McpStatus = Literal["starting", "ready", "error"]
@@ -44,4 +44,7 @@ class AppSnapshot:
     session_duration_seconds: int
     camera_fps: float = 0.0
     detection_ratio: float = 0.0
+    combo_multiplier: float = 1.0
+    taps_per_hand: dict[Hand, int] = field(default_factory=dict)
+    taps_per_hand_finger: dict[tuple[Hand, Finger], int] = field(default_factory=dict)
     schema_version: int = field(default=1)

@@ -12,6 +12,7 @@ def test_defaults(taprivo_home: Path) -> None:
     assert cfg.energy.max_energy == 10000
     assert cfg.combo.timeout_ms == 600
     assert cfg.combo.energy_multiplier_enabled is False
+    assert cfg.simulator.max_taps_per_second == 12
     assert cfg.server.port == 32145
     assert cfg.server.max_reason_length == 200
     assert cfg.endpoint_url == "http://127.0.0.1:32145/mcp"
@@ -115,4 +116,11 @@ def test_hud_theme_rejects_unknown_value(taprivo_home: Path) -> None:
     taprivo_home.mkdir(parents=True)
     (taprivo_home / "config.yaml").write_text("hud:\n  theme: neon\n")
     with pytest.raises(ConfigError, match="theme"):
+        load_config()
+
+
+def test_tap_cap_must_be_at_least_one(taprivo_home: Path) -> None:
+    taprivo_home.mkdir(parents=True)
+    (taprivo_home / "config.yaml").write_text("simulator:\n  max_taps_per_second: 0\n")
+    with pytest.raises(ConfigError, match="max_taps_per_second"):
         load_config()

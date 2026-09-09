@@ -7,7 +7,7 @@ from mcp.client import Client
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
-from taprivo.core.events import Finger
+from taprivo.core.events import Finger, Hand
 from taprivo.mcp.server import TOOL_NAMES, build_server
 from taprivo.simulator import Simulator
 
@@ -17,9 +17,20 @@ def engine() -> EnergyEngine:
     return EnergyEngine(Config())
 
 
+class SpacedClock:
+    """A clock that walks a second per tap, clear of the cap and the combo window."""
+
+    def __init__(self) -> None:
+        self._now = 0
+
+    def __call__(self) -> int:
+        self._now += 1_000
+        return self._now
+
+
 @pytest.fixture
 def simulator(engine: EnergyEngine) -> Simulator:
-    sim = Simulator(engine, Config())
+    sim = Simulator(engine, Config(), now_ms=SpacedClock())
     sim.start()
     return sim
 
@@ -51,7 +62,7 @@ async def test_tools_listed_with_annotations(engine: EnergyEngine) -> None:
 
 
 async def test_get_energy_shape(engine: EnergyEngine, simulator: Simulator) -> None:
-    simulator.tap(Finger.INDEX)
+    simulator.tap(Hand.RIGHT, Finger.INDEX)
     data = await call(engine, "get_energy")
     assert data == {
         "schema_version": 1,
@@ -68,7 +79,7 @@ async def test_get_energy_shape(engine: EnergyEngine, simulator: Simulator) -> N
 
 async def test_spend_round_trip(engine: EnergyEngine, simulator: Simulator) -> None:
     for _ in range(30):
-        simulator.tap(Finger.MIDDLE)
+        simulator.tap(Hand.LEFT, Finger.MIDDLE)
     args = {
         "amount": 250,
         "reason": "Implement validation",
@@ -84,7 +95,7 @@ async def test_spend_round_trip(engine: EnergyEngine, simulator: Simulator) -> N
 
 
 async def test_spend_structured_errors(engine: EnergyEngine, simulator: Simulator) -> None:
-    simulator.tap(Finger.RING)
+    simulator.tap(Hand.RIGHT, Finger.RING)
     base = {"reason": "r", "request_id": "x", "session_id": engine.session_id}
     insufficient = await call(engine, "spend_energy", {**base, "amount": 999})
     assert insufficient == {
@@ -103,8 +114,8 @@ async def test_spend_structured_errors(engine: EnergyEngine, simulator: Simulato
 
 
 async def test_get_stats_and_session(engine: EnergyEngine, simulator: Simulator) -> None:
-    simulator.tap(Finger.THUMB)
-    simulator.tap(Finger.THUMB)
+    simulator.tap(Hand.LEFT, Finger.INDEX)
+    simulator.tap(Hand.RIGHT, Finger.INDEX)
     await call(
         engine,
         "spend_energy",
@@ -112,7 +123,7 @@ async def test_get_stats_and_session(engine: EnergyEngine, simulator: Simulator)
     )
     stats = await call(engine, "get_stats", {"scope": "session"})
     assert stats["taps_total"] == 2
-    assert stats["taps_per_finger"]["thumb"] == 2
+    assert stats["taps_per_finger"]["index"] == 2
     assert stats["spend_count"] == 1
     assert stats["last_spend"]["amount"] == 10
     assert stats["combo"] >= 1

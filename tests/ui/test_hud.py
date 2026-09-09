@@ -23,9 +23,9 @@ def test_key_press_taps_when_simulator_running(hud: HudBundle, qtbot: QtBot) -> 
     hud.window.toggle_simulator()
     assert hud.window.toggle_button.text() == "Stop Simulator"
     qtbot.keyClick(hud.window, "2")
-    qtbot.keyClick(hud.window, "5")
+    qtbot.keyClick(hud.window, "0")
     qtbot.waitUntil(lambda: hud.window.energy_label.text() == "20 / 10000", timeout=2000)
-    assert "Index 1" in hud.window.fingers_label.text()
+    assert "Ring 1" in hud.window.fingers_label.text()
     assert "Pinky 1" in hud.window.fingers_label.text()
     assert hud.window.bar.value() == 20
     assert "Simulator" in hud.window.tracking_label.text()

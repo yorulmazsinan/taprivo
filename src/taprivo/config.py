@@ -48,6 +48,7 @@ class ServerConfig(_Frozen):
 class SimulatorConfig(_Frozen):
     displacement: float = Field(default=0.04, gt=0)
     velocity: float = Field(default=0.6, gt=0)
+    max_taps_per_second: int = Field(default=12, ge=1)
 
 
 class HudConfig(_Frozen):

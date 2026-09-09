@@ -14,6 +14,7 @@ server:
 simulator:
   displacement: 0.04
   velocity: 0.6
+  max_taps_per_second: 12
 hud:
   always_on_top: true
   opacity: 0.92
