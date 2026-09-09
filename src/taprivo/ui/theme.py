@@ -133,6 +133,43 @@ def stylesheet(palette: Palette) -> str:
         selection-background-color: {palette.accent};
         selection-color: {palette.bg};
     }}
+    QLineEdit {{
+        background-color: {palette.surface_alt};
+        color: {palette.text};
+        border: 1px solid {palette.border};
+        border-radius: 6px;
+        padding: 5px 8px;
+    }}
+    QCheckBox {{
+        background: transparent;
+        color: {palette.text_dim};
+    }}
+    QCheckBox::indicator {{
+        width: 13px;
+        height: 13px;
+        border: 1px solid {palette.border};
+        border-radius: 4px;
+        background-color: {palette.surface_alt};
+    }}
+    QCheckBox::indicator:checked {{
+        border: 1px solid {palette.accent};
+        background-color: {palette.accent};
+    }}
+    QTableWidget {{
+        background-color: {palette.bg};
+        border: 1px solid {palette.border};
+        border-radius: 8px;
+        gridline-color: {palette.border};
+    }}
+    QTableWidget::item {{
+        padding: 4px 6px;
+    }}
+    QHeaderView::section {{
+        background-color: {palette.surface_alt};
+        color: {palette.text_dim};
+        border: none;
+        padding: 5px 6px;
+    }}
     QProgressBar {{
         background-color: {palette.surface_alt};
         border: none;
