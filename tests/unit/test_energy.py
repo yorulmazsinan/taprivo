@@ -18,7 +18,7 @@ def tap(engine: EnergyEngine, ts: int = 0, finger: Finger = Finger.INDEX) -> Non
             event_id=f"e{ts}",
             session_id=engine.session_id,
             hand=Hand.RIGHT,
-            hand_id="sim-right",
+            hand_id="kbd-right",
             finger=finger,
             timestamp_monotonic_ms=ts,
             displacement=0.04,

@@ -9,7 +9,7 @@ import pytest
 from taprivo import paths
 from taprivo.config import Config, ServerConfig
 from taprivo.core.energy import EnergyEngine
-from taprivo.core.events import Finger
+from taprivo.core.events import Finger, Hand
 from taprivo.mcp.client import LocalClient, NotRunningError, UnauthorizedError, for_config, run_sync
 from taprivo.mcp.server import TOOL_NAMES, McpServerThread
 from tests.integration.conftest import RunningServer, free_port
@@ -20,7 +20,7 @@ def client_for(server: RunningServer, token: str | None = None) -> LocalClient:
 
 
 def test_list_and_call_over_http(running_server: RunningServer) -> None:
-    running_server.simulator.tap(Finger.INDEX)
+    running_server.simulator.tap(Hand.RIGHT, Finger.INDEX)
     client = client_for(running_server)
     assert run_sync(client.tool_names()) == list(TOOL_NAMES)
     energy = run_sync(client.call("get_energy", {}))
@@ -29,7 +29,7 @@ def test_list_and_call_over_http(running_server: RunningServer) -> None:
 
 def test_spend_over_http_is_idempotent(running_server: RunningServer) -> None:
     for _ in range(5):
-        running_server.simulator.tap(Finger.RING)
+        running_server.simulator.tap(Hand.RIGHT, Finger.RING)
     client = client_for(running_server)
     args = {
         "amount": 30,
@@ -45,7 +45,7 @@ def test_spend_over_http_is_idempotent(running_server: RunningServer) -> None:
 
 def test_two_clients_share_one_balance(running_server: RunningServer) -> None:
     for _ in range(5):
-        running_server.simulator.tap(Finger.INDEX)
+        running_server.simulator.tap(Hand.LEFT, Finger.INDEX)
     client_a = client_for(running_server)
     client_b = client_for(running_server)
 

@@ -114,7 +114,7 @@ class EnergyEngine:
             self._gross += per_tap
             self._overflow += per_tap - credited
             self._combo.record(event.timestamp_monotonic_ms)
-            self._session.record_tap(event.finger, event.timestamp_monotonic_ms)
+            self._session.record_tap(event.hand, event.finger, event.timestamp_monotonic_ms)
             snapshot = self._snapshot_locked()
         log.debug(
             "[TAP] %s:%s displacement=%.3f velocity=%.2f +%d",
@@ -245,6 +245,8 @@ class EnergyEngine:
             combo=self._combo.count,
             taps_total=self._session.taps_total,
             taps_per_finger=dict(self._session.taps_per_finger),
+            taps_per_hand=dict(self._session.taps_per_hand),
+            taps_per_hand_finger=dict(self._session.taps_per_hand_finger),
             taps_per_minute=self._session.taps_per_minute(now),
             spend_count=self._session.spend_count,
             last_spend=self._session.last_spend,
