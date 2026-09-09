@@ -116,3 +116,7 @@ runtime from blocking capture.
   `com.apple.security.cs.disable-library-validation`: CPython's frozen bundle
   loads unsigned extension modules that library validation would otherwise
   reject.
+
+### Notarization credentials
+
+Either store a keychain profile once (`xcrun notarytool store-credentials taprivo-notary --key AuthKey.p8 --key-id <ID> --issuer <UUID>`) and export `TAPRIVO_NOTARY_PROFILE=taprivo-notary`, or point the script straight at the App Store Connect API key: `TAPRIVO_NOTARY_KEY=~/.private_keys/AuthKey_<ID>.p8`, `TAPRIVO_NOTARY_KEY_ID=<ID>`, `TAPRIVO_NOTARY_ISSUER=<UUID>`. The key-file form is the one to use from CI or from a shell that cannot read the login keychain.
