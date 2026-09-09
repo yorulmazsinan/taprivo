@@ -19,18 +19,19 @@ from PySide6.QtWidgets import (
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
-from taprivo.core.events import Finger
+from taprivo.core.events import Finger, Hand
 from taprivo.core.state import AppSnapshot
-from taprivo.simulator import Simulator
+from taprivo.simulator import KEY_MAP, Simulator
 from taprivo.ui.theme import Palette, resolve
 from taprivo.ui.widgets import Chip, EnergyBar, StatusDot, StatusKind
 
 RENDER_INTERVAL_MS = 33
-WINDOW_WIDTH = 380
+WINDOW_WIDTH = 480
 CONTENT_MARGIN = 16
+CHIPS_PER_ROW = 4
 TRACKING_TEXT = {
     "inactive": "Inactive",
-    "simulator": "Simulator running",
+    "simulator": "Keyboard running",
     "tracking": "Tracking",
     "stale": "Stale (disconnected)",
     "no_signal": "No signal",
@@ -44,6 +45,17 @@ TRACKING_KIND: dict[str, StatusKind] = {
 }
 MCP_TEXT = {"starting": "Starting", "ready": "Ready", "error": "Error"}
 MCP_KIND: dict[str, StatusKind] = {"starting": "warn", "ready": "ok", "error": "err"}
+
+
+def _toggle_text(running: bool) -> str:
+    return "Stop Keyboard" if running else "Start Keyboard"
+
+
+def _combo_text(snapshot: AppSnapshot) -> str:
+    text = f"COMBO x{snapshot.combo}"
+    if snapshot.combo_multiplier > 1.0:
+        text += f" · {snapshot.combo_multiplier:g}×"
+    return text
 
 
 class HudWindow(QWidget):
@@ -110,15 +122,20 @@ class HudWindow(QWidget):
 
         self.fingers_label = QLabel("")
         self.fingers_label.hide()
-        self.chips: dict[Finger, Chip] = {}
+        # One chip per drumming key: left hand on the first row, right on the second.
+        self.chips: dict[tuple[Hand, Finger], Chip] = {}
+        self._chip_labels: dict[tuple[Hand, Finger], str] = {
+            (hand, finger): f"{key} {finger.value.title()}"
+            for key, (hand, finger) in KEY_MAP.items()
+        }
         chip_row = QGridLayout()
-        chip_row.setHorizontalSpacing(8)
-        chip_row.setVerticalSpacing(8)
-        for index, finger in enumerate(Finger):
+        chip_row.setHorizontalSpacing(4)
+        chip_row.setVerticalSpacing(6)
+        for index, (hand, finger) in enumerate(KEY_MAP.values()):
             chip = Chip(palette=palette)
-            chip.setChip(palette.finger[finger], finger.value.title(), 0)
-            self.chips[finger] = chip
-            chip_row.addWidget(chip, index // 3, index % 3)
+            chip.setChip(palette.finger[finger], self._chip_labels[(hand, finger)], 0)
+            self.chips[(hand, finger)] = chip
+            chip_row.addWidget(chip, index // CHIPS_PER_ROW, index % CHIPS_PER_ROW)
 
         self.combo_label = QLabel("COMBO x0")
         self.rate_label = QLabel("0 taps/min")
@@ -139,7 +156,7 @@ class HudWindow(QWidget):
         status.addStretch(1)
         status.addWidget(self.mcp_label)
 
-        self.toggle_button = QPushButton("Start Simulator")
+        self.toggle_button = QPushButton("Start Keyboard")
         self.toggle_button.setObjectName("primary")
         self.toggle_button.clicked.connect(self.toggle_simulator)
         self.reset_button = QPushButton("Reset Session")
@@ -164,7 +181,7 @@ class HudWindow(QWidget):
             buttons.addWidget(button, index // 2, index % 2)
 
         self.footer_label = QLabel(
-            "Keys 1-5 tap thumb…pinky (simulator). Balance resets when Taprivo quits."
+            "Keys 1-4 left hand, 7-8-9-0 right hand. Balance resets when Taprivo quits."
         )
         self.footer_label.setStyleSheet(f"color: {palette.text_dim}; font-size: 11px;")
         self.footer_label.setWordWrap(True)
@@ -226,18 +243,16 @@ class HudWindow(QWidget):
                 for finger in Finger
             )
         )
-        for finger in Finger:
-            count = snapshot.taps_per_finger.get(finger, 0)
-            self.chips[finger].setChip(self._palette.finger[finger], finger.value.title(), count)
-        self.combo_label.setText(f"COMBO x{snapshot.combo}")
+        for (hand, finger), chip in self.chips.items():
+            count = snapshot.taps_per_hand_finger.get((hand, finger), 0)
+            chip.setChip(self._palette.finger[finger], self._chip_labels[(hand, finger)], count)
+        self.combo_label.setText(_combo_text(snapshot))
         self.rate_label.setText(f"{snapshot.taps_per_minute} taps/min")
         self.tracking_label.setStatus(
             TRACKING_KIND[snapshot.tracking], f"Tracking: {TRACKING_TEXT[snapshot.tracking]}"
         )
         self.mcp_label.setStatus(MCP_KIND[snapshot.mcp], f"MCP: {MCP_TEXT[snapshot.mcp]}")
-        self.toggle_button.setText(
-            "Stop Simulator" if self._simulator.running else "Start Simulator"
-        )
+        self.toggle_button.setText(_toggle_text(self._simulator.running))
 
     # -- actions -------------------------------------------------------------
 
@@ -247,9 +262,7 @@ class HudWindow(QWidget):
             self._simulator.stop()
         else:
             self._simulator.start()
-        self.toggle_button.setText(
-            "Stop Simulator" if self._simulator.running else "Start Simulator"
-        )
+        self.toggle_button.setText(_toggle_text(self._simulator.running))
         self.setFocus()
 
     @Slot()
