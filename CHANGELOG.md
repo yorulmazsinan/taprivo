@@ -5,6 +5,13 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Claude Code usage card in the HUD: the model, how full the context window is, the five-hour and seven-day usage limits with the time until each one resets, and the session's cost and elapsed time. The limits come from a Pro or Max subscription; on an API key the card says they are not available. A report older than 90 seconds dims the card and says how long ago it arrived.
+- `taprivo setup claude --statusline`, and a **Show Claude Code usage in the HUD (status line)** checkbox on the Setup window's Claude Code row, install `~/.config/taprivo/statusline.sh` (mode 0700) and point Claude Code's `statusLine` setting at it. `~/.claude/settings.json` is backed up first and every other setting is kept. A status line that was already configured is saved to `statusline-chain.json`, still runs, and its output is printed before Taprivo's; `taprivo remove claude` restores it and deletes both files.
+- Claude Code's own status line gains the energy balance: `⚡ 2795 · x17 1.5× · 5h 42%`.
+- `POST /statusline` on the local server takes the JSON Claude Code pipes to its status line, behind the same bearer token, Host and Origin allowlists, 64 KB body cap and rate limit as `/mcp`. The payload is read in memory and dropped: it is never logged and never written to the statistics file.
+- MCP `get_session` gains an additive `agent` field with the same values plus their age in seconds, and `taprivo doctor` gains a `claude_statusline` check.
+
 ## [0.1.0b6] - 2026-09-09
 
 Beta preview: a redesigned HUD, an app icon and a richer camera window.

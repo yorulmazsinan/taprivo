@@ -134,6 +134,33 @@ claude --project`. That writes a `.mcp.json` entry whose token comes from the
 `uv run taprivo remove claude` undoes the registration and removes only the
 files and blocks Taprivo added.
 
+### Usage in the HUD
+
+```bash
+uv run taprivo setup claude --statusline
+```
+
+Claude Code runs a status line command and pipes a JSON description of the
+session into it on every assistant message. `--statusline` writes
+`~/.config/taprivo/statusline.sh` (mode 0700) and points Claude Code's
+`statusLine` setting at it, after backing up `~/.claude/settings.json` and
+keeping every other setting. In the app, the same switch is the **Show Claude
+Code usage in the HUD (status line)** checkbox on the Claude Code row of the
+Setup window, on by default.
+
+The HUD then shows a **Claude Code** card with the model, how full the context
+window is, the five-hour and seven-day usage limits with the time until each
+one resets, and the session's cost and elapsed time. The two limits come from a
+Pro or Max subscription; on an API key Claude Code does not report them and the
+card says so. A card older than 90 seconds dims and says when it last heard
+anything.
+
+In the other direction, Claude Code's own status line gains your energy:
+`⚡ 2795 · x17 1.5× · 5h 42%`. A status line you had configured before is not
+lost — it is saved to `~/.config/taprivo/statusline-chain.json`, still runs, and
+its output is printed before Taprivo's. `uv run taprivo remove claude` puts it
+back and deletes both files.
+
 ### Cursor
 
 ```bash
@@ -199,7 +226,7 @@ Keep the whole hand inside the frame; a hand partly out of view is ignored.
 | `taprivo stats [--json]` | Session statistics of the running app, plus today's totals |
 | `taprivo stats --today [--json]` | Today's totals, read from the local statistics file |
 | `taprivo stats --history [--days N] [--json]` | Daily totals, newest first (default 30 days) |
-| `taprivo setup claude [--project] [--install-instructions] [--dry-run] [--json]` | Connect Claude Code |
+| `taprivo setup claude [--project] [--install-instructions] [--statusline] [--dry-run] [--json]` | Connect Claude Code |
 | `taprivo remove claude [--project] [--json]` | Disconnect Claude Code |
 | `taprivo setup cursor [--project] [--install-instructions] [--dry-run] [--json]` | Connect Cursor |
 | `taprivo remove cursor [--project] [--json]` | Disconnect Cursor |
@@ -260,6 +287,8 @@ If port 32145 is taken, the HUD shows `MCP: Error`; set `server.port` and run
 - Statistics are stored locally in `~/.config/taprivo/stats.sqlite` as counters
   and timestamps only — no spend reasons, no camera data; disable with
   `stats.enabled: false`.
+- The status line JSON Claude Code pipes to Taprivo is read in memory and
+  dropped; it is never logged and never written to the statistics file.
 - No telemetry. The only network listener is the local endpoint.
 - Logs stay low-volume and never contain the token or spend reasons in full.
 
@@ -287,6 +316,7 @@ Camera (MediaPipe hand landmarks, squeeze detector) / keyboard simulator
 | Rhythm / BPM | implemented (beta) |
 | Persistent stats (SQLite) | implemented (beta) |
 | Cursor | implemented (beta) |
+| Claude Code usage card | implemented (beta) |
 | Other agents (Codex, …) | planned |
 
 See [ROADMAP.md](ROADMAP.md).

@@ -133,6 +133,33 @@ Yapılandırmayı bir depo içinde paylaşmak için `uv run taprivo setup claude
 `uv run taprivo remove claude` kaydı geri alır ve yalnızca Taprivo'nun eklediği
 dosya ve blokları kaldırır.
 
+### HUD'da kullanım
+
+```bash
+uv run taprivo setup claude --statusline
+```
+
+Claude Code bir durum satırı komutu çalıştırır ve her asistan mesajında oturumu
+anlatan bir JSON'u bu komutun girdisine aktarır. `--statusline`,
+`~/.config/taprivo/statusline.sh` dosyasını yazar (0700 kipi) ve Claude Code'un
+`statusLine` ayarını ona yönlendirir; önce `~/.claude/settings.json` yedeklenir
+ve diğer tüm ayarlar korunur. Uygulamada aynı seçenek, Kurulum penceresindeki
+Claude Code satırında bulunan ve varsayılan olarak açık olan **Show Claude Code
+usage in the HUD (status line)** kutusudur.
+
+HUD böylece bir **Claude Code** kartı gösterir: model, bağlam penceresinin ne
+kadarının dolu olduğu, beş saatlik ve yedi günlük kullanım limitleri ile her
+birinin sıfırlanmasına kalan süre, ve oturumun maliyeti ile geçen süresi. İki
+limit yalnızca Pro veya Max aboneliğinde gelir; API anahtarıyla Claude Code
+bunları bildirmez ve kart bunu söyler. 90 saniyeden eski bir kart soluklaşır ve
+en son ne zaman haber aldığını yazar.
+
+Ters yönde, Claude Code'un kendi durum satırı enerjinizi gösterir:
+`⚡ 2795 · x17 1.5× · 5h 42%`. Daha önce ayarladığınız bir durum satırı
+kaybolmaz — `~/.config/taprivo/statusline-chain.json` dosyasına kaydedilir,
+çalışmaya devam eder ve çıktısı Taprivo'nunkinden önce yazılır.
+`uv run taprivo remove claude` onu geri koyar ve her iki dosyayı da siler.
+
 ### Cursor
 
 ```bash
@@ -197,7 +224,7 @@ Elin tamamını kadrajda tutun; kısmen görünen el yok sayılır.
 | `taprivo stats [--json]` | Çalışan uygulamanın oturum istatistikleri ve bugünün toplamları |
 | `taprivo stats --today [--json]` | Bugünün toplamları, yerel istatistik dosyasından |
 | `taprivo stats --history [--days N] [--json]` | Günlük toplamlar, en yeniden eskiye (varsayılan 30 gün) |
-| `taprivo setup claude [--project] [--install-instructions] [--dry-run] [--json]` | Claude Code'u bağla |
+| `taprivo setup claude [--project] [--install-instructions] [--statusline] [--dry-run] [--json]` | Claude Code'u bağla |
 | `taprivo remove claude [--project] [--json]` | Claude Code bağlantısını kaldır |
 | `taprivo setup cursor [--project] [--install-instructions] [--dry-run] [--json]` | Cursor'ı bağla |
 | `taprivo remove cursor [--project] [--json]` | Cursor bağlantısını kaldır |
@@ -259,6 +286,8 @@ değiştirmez.
 - İstatistikler yalnızca sayaç ve zaman damgası olarak
   `~/.config/taprivo/stats.sqlite` dosyasında yerel tutulur — harcama gerekçesi
   ve kamera verisi yoktur; `stats.enabled: false` ile kapatılır.
+- Claude Code'un Taprivo'ya aktardığı durum satırı JSON'u bellekte okunur ve
+  atılır; hiçbir zaman loglanmaz ve istatistik dosyasına yazılmaz.
 - Telemetri yoktur. Tek ağ dinleyicisi yerel uç noktadır.
 - Loglar düşük hacimlidir; token'ı hiçbir zaman, harcama gerekçelerini ise tam metin olarak içermez.
 
@@ -286,6 +315,7 @@ Kamera (MediaPipe el landmark'ları, sıkma algılayıcı) / klavye simülatör�
 | Ritim / BPM | uygulandı (beta) |
 | Kalıcı istatistikler (SQLite) | uygulandı (beta) |
 | Cursor | uygulandı (beta) |
+| Claude Code kullanım kartı | uygulandı (beta) |
 | Diğer ajanlar (Codex, …) | planlandı |
 
 Bkz. [ROADMAP.md](ROADMAP.md).
