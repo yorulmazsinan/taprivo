@@ -6,6 +6,8 @@ from pytestqt.qtbot import QtBot
 
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
+from taprivo.core.events import Finger, Hand
+from taprivo.simulator import KEY_MAP
 from tests.ui.conftest import HudBundle
 
 
@@ -13,22 +15,53 @@ def test_initial_render(hud: HudBundle) -> None:
     assert hud.window.energy_label.text() == "0 / 10000"
     assert "Inactive" in hud.window.tracking_label.text()
     assert "Starting" in hud.window.mcp_label.text()
-    assert "resets when Taprivo quits" in hud.window.footer_label.text()
-    assert hud.window.toggle_button.text() == "Start Simulator"
+    footer = hud.window.footer_label.text()
+    assert "Keys 1-4 left hand, 7-8-9-0 right hand." in footer
+    assert "resets when Taprivo quits" in footer
+    assert hud.window.toggle_button.text() == "Start Keyboard"
 
 
-def test_key_press_taps_when_simulator_running(hud: HudBundle, qtbot: QtBot) -> None:
+def test_key_press_taps_when_keyboard_running(hud: HudBundle, qtbot: QtBot) -> None:
     qtbot.keyClick(hud.window, "2")
-    assert hud.engine.snapshot().available == 0  # simulator not started yet
+    assert hud.engine.snapshot().available == 0  # keyboard mode not started yet
     hud.window.toggle_simulator()
-    assert hud.window.toggle_button.text() == "Stop Simulator"
+    assert hud.window.toggle_button.text() == "Stop Keyboard"
     qtbot.keyClick(hud.window, "2")
     qtbot.keyClick(hud.window, "0")
     qtbot.waitUntil(lambda: hud.window.energy_label.text() == "20 / 10000", timeout=2000)
     assert "Ring 1" in hud.window.fingers_label.text()
     assert "Pinky 1" in hud.window.fingers_label.text()
     assert hud.window.bar.value() == 20
-    assert "Simulator" in hud.window.tracking_label.text()
+    assert "Keyboard running" in hud.window.tracking_label.text()
+
+
+def test_chips_cover_both_hands_and_show_their_keys(hud: HudBundle, qtbot: QtBot) -> None:
+    assert len(hud.window.chips) == 8
+    for key, (hand, finger) in KEY_MAP.items():
+        chip = hud.window.chips[(hand, finger)]
+        assert f"{key} {finger.value.title()}" in chip.text(), key
+    hud.window.toggle_simulator()
+    qtbot.keyClick(hud.window, "7")
+    qtbot.keyClick(hud.window, "7")
+    right_index = hud.window.chips[(Hand.RIGHT, Finger.INDEX)]
+    qtbot.waitUntil(lambda: "7 Index 2" in right_index.text(), timeout=2000)
+    assert "4 Index 0" in hud.window.chips[(Hand.LEFT, Finger.INDEX)].text()
+    assert (Hand.LEFT, Finger.THUMB) not in hud.window.chips
+
+
+def test_combo_line_shows_the_multiplier(hud: HudBundle, qtbot: QtBot) -> None:
+    assert hud.window.combo_label.text() == "COMBO x0"
+    hud.window.toggle_simulator()
+    for _ in range(10):
+        qtbot.keyClick(hud.window, "3")
+    qtbot.waitUntil(lambda: "1.5×" in hud.window.combo_label.text(), timeout=2000)
+    assert hud.window.combo_label.text() == "COMBO x10 · 1.5×"
+
+
+def test_combo_line_hides_a_flat_multiplier(hud: HudBundle, qtbot: QtBot) -> None:
+    hud.window.toggle_simulator()
+    qtbot.keyClick(hud.window, "3")
+    qtbot.waitUntil(lambda: hud.window.combo_label.text() == "COMBO x1", timeout=2000)
 
 
 def test_reset_requires_confirmation(
@@ -97,9 +130,16 @@ def test_open_camera_button_calls_back(qtbot: QtBot) -> None:
     assert not plain.open_camera_button.isEnabled()
 
 
+def test_unmapped_keys_do_nothing(hud: HudBundle, qtbot: QtBot) -> None:
+    hud.window.toggle_simulator()
+    for key in ("5", "6"):
+        qtbot.keyClick(hud.window, key)
+    assert hud.engine.snapshot().taps_total == 0
+
+
 def test_snapshot_renders_expected_size_and_colors(hud: HudBundle) -> None:
     image = hud.window.grab().toImage()
-    assert image.width() == 380
+    assert image.width() == 480
     colors: set[int] = set()
     for y in range(image.height()):
         for x in range(image.width()):

@@ -215,7 +215,7 @@ class Chip(QLabel):
         self.setTextFormat(Qt.TextFormat.RichText)
         self.setStyleSheet(
             f"background-color: {palette.surface_alt}; border-radius: 8px; "
-            f"padding: 3px 8px; font-size: 12px;"
+            f"padding: 3px 5px; font-size: 11px;"
         )
 
     def setChip(self, color: str, label: str, value: int) -> None:
