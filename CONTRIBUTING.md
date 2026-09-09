@@ -46,3 +46,7 @@ uv run mypy
 `bug`, `enhancement`, `documentation`, `good first issue`, `help wanted`,
 `needs-triage`, `area:vision`, `area:mcp`, `area:hud`, `area:cli`,
 `platform:macos`, `phase:1`, `phase:2`.
+
+## Releases
+
+A maintainer bumps the version, tags `vX.Y.Z` and publishes a GitHub release; the `Publish` workflow then builds the sdist and wheel and uploads them to PyPI through trusted publishing (no API tokens are stored in the repository).
