@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import pytest
+from PySide6.QtCore import QAbstractAnimation, Qt
 from PySide6.QtWidgets import QMessageBox
 from pytestqt.qtbot import QtBot
 
-from taprivo.config import Config
+from taprivo.config import Config, HudConfig
 from taprivo.core.energy import EnergyEngine
 from taprivo.core.events import Finger, Hand
+from taprivo.core.state import LastSpend
 from taprivo.simulator import KEY_MAP, Simulator
-from taprivo.ui.hud import HudWindow
+from taprivo.ui.hud import COMBO_PIXEL_SIZE, MCP_TEXT, HudWindow
 from taprivo.ui.theme import DARK
 from tests.ui.conftest import HudBundle
 
@@ -258,3 +261,121 @@ def test_menu_actions_run_the_same_slots(hud: HudBundle, monkeypatch: pytest.Mon
     hud.window.reset_button.trigger()
     hud.window.mcp_button.trigger()
     assert asked == ["reset", "mcp"]
+
+
+@pytest.mark.parametrize(
+    ("tracking", "short", "full"),
+    [
+        ("inactive", "Idle", "Tracking: Inactive"),
+        ("simulator", "Keyboard", "Tracking: Keyboard running"),
+        ("stale", "Camera stale", "Tracking: Stale (disconnected)"),
+        ("no_signal", "No signal", "Tracking: No signal"),
+    ],
+)
+def test_tracking_badge_per_state(qtbot: QtBot, tracking: str, short: str, full: str) -> None:
+    window, engine = _themed_hud(qtbot)
+    _render(window, engine, qtbot, tracking=tracking)
+    qtbot.waitUntil(lambda: window.tracking_label.text() == full, timeout=2000)
+    assert window.tracking_label.shortText() == short
+
+
+def test_tracking_badge_carries_the_camera_rate(qtbot: QtBot) -> None:
+    window, engine = _themed_hud(qtbot)
+    _render(window, engine, qtbot, tracking="tracking", camera_fps=29.4)
+    qtbot.waitUntil(lambda: window.tracking_label.shortText() == "Camera 29 fps", timeout=2000)
+    assert window.tracking_label.text() == "Tracking: Tracking"
+    assert window.tracking_label.kind() == "ok"
+
+
+@pytest.mark.parametrize(
+    ("status", "short", "kind"),
+    [
+        ("starting", "MCP starting", "warn"),
+        ("ready", "MCP ready", "ok"),
+        ("error", "MCP error", "err"),
+    ],
+)
+def test_mcp_badge_per_state(qtbot: QtBot, status: str, short: str, kind: str) -> None:
+    window, engine = _themed_hud(qtbot)
+    _render(window, engine, qtbot, mcp=status)
+    qtbot.waitUntil(lambda: window.mcp_label.shortText() == short, timeout=2000)
+    assert window.mcp_label.kind() == kind
+    assert MCP_TEXT[status] in window.mcp_label.text()
+
+
+def test_clicking_the_mcp_badge_opens_the_status_dialog(
+    hud: HudBundle, monkeypatch: pytest.MonkeyPatch, qtbot: QtBot
+) -> None:
+    shown: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox, "information", staticmethod(lambda _p, _t, text: shown.append(text))
+    )
+    qtbot.mouseClick(hud.window.mcp_label, Qt.MouseButton.LeftButton)
+    assert shown and "Endpoint:" in shown[0]
+
+
+def _spend_snapshot(engine: EnergyEngine, count: int, amount: int) -> object:
+    return replace(
+        engine.snapshot(),
+        spend_count=count,
+        last_spend=LastSpend(amount=amount, reason="prompt", at_utc=datetime.now(UTC)),
+    )
+
+
+def test_spend_floats_a_label_that_disappears(qtbot: QtBot) -> None:
+    window, engine = _themed_hud(qtbot)
+    window.show()
+    window.on_snapshot(engine.snapshot())
+    qtbot.waitUntil(lambda: window.tracking_label.text() != "", timeout=2000)
+    window.on_snapshot(_spend_snapshot(engine, 1, 250))
+    qtbot.waitUntil(lambda: window.spend_label.isVisible(), timeout=2000)
+    assert window.spend_label.text() == "\u2212250"
+    qtbot.waitUntil(lambda: not window.spend_label.isVisible(), timeout=3000)
+
+
+def test_reduced_motion_hides_the_spend_label_without_animating(qtbot: QtBot) -> None:
+    cfg = Config(hud=HudConfig(reduced_motion=True, always_on_top=False))
+    engine = EnergyEngine(cfg)
+    window = HudWindow(engine, Simulator(engine, cfg), cfg, palette=DARK)
+    qtbot.addWidget(window)
+    window.show()
+    window.on_snapshot(engine.snapshot())
+    qtbot.waitUntil(lambda: window.tracking_label.text() != "", timeout=2000)
+    window.on_snapshot(_spend_snapshot(engine, 1, 250))
+    qtbot.waitUntil(lambda: window.spend_label.isVisible(), timeout=2000)
+    assert window._spend_animation.state() == QAbstractAnimation.State.Stopped
+    qtbot.waitUntil(lambda: not window.spend_label.isVisible(), timeout=3000)
+
+
+def test_combo_tier_change_pulses_the_combo_line(hud: HudBundle, qtbot: QtBot) -> None:
+    """The pulse runs once and leaves the label back at its base size."""
+    hud.window.toggle_simulator()
+    for _ in range(10):
+        qtbot.keyClick(hud.window, "3")
+    qtbot.waitUntil(lambda: "1.5×" in hud.window.combo_label.text(), timeout=2000)
+    qtbot.waitUntil(
+        lambda: hud.window._combo_pulse.state() == QAbstractAnimation.State.Stopped,
+        timeout=2000,
+    )
+    assert f"font-size: {COMBO_PIXEL_SIZE}px" in hud.window.combo_label.styleSheet()
+
+
+def test_reduced_motion_skips_the_combo_pulse(reduced_motion_hud: HudBundle, qtbot: QtBot) -> None:
+    window = reduced_motion_hud.window
+    window.toggle_simulator()
+    for _ in range(10):
+        qtbot.keyClick(window, "3")
+    qtbot.waitUntil(lambda: "1.5×" in window.combo_label.text(), timeout=2000)
+    assert window._combo_pulse.state() == QAbstractAnimation.State.Stopped
+    assert f"font-size: {COMBO_PIXEL_SIZE}px" in window.combo_label.styleSheet()
+
+
+def test_hand_map_counts_follow_the_taps(hud: HudBundle, qtbot: QtBot) -> None:
+    hud.window.toggle_simulator()
+    qtbot.keyClick(hud.window, "8")
+    qtbot.keyClick(hud.window, "8")
+    qtbot.waitUntil(
+        lambda: hud.window.hand_map.counts().get((Hand.RIGHT, Finger.MIDDLE)) == 2,
+        timeout=2000,
+    )
+    assert hud.window.hand_map.keycaps[(Hand.RIGHT, Finger.MIDDLE)] == "8"
