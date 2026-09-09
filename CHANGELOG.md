@@ -5,6 +5,10 @@ Keep a Changelog and the project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.1.0b6] - 2026-09-09
+
+Beta preview: a redesigned HUD, an app icon and a richer camera window.
+
 ### Added
 - App icon: an open hand with a lightning bolt on a dark tile. `packaging/macos/icon.svg` is the only source; `packaging/macos/make_icon.py` renders every size from it into `Taprivo.icns` for the app bundle and `icon.png` for the window and Dock icon.
 
@@ -110,7 +114,8 @@ macOS package yet.
 - No camera support yet; the balance resets when the app quits.
 - Only Claude Code is tested as an MCP client.
 
-[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b5...HEAD
+[Unreleased]: https://github.com/yorulmazsinan/taprivo/compare/v0.1.0b6...HEAD
+[0.1.0b6]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b6
 [0.1.0b5]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b5
 [0.1.0b4]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b4
 [0.1.0b3]: https://github.com/yorulmazsinan/taprivo/releases/tag/v0.1.0b3
