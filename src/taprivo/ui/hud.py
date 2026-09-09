@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 
 from PySide6.QtCore import (
@@ -30,10 +31,10 @@ from PySide6.QtWidgets import (
 from taprivo.config import Config
 from taprivo.core.energy import EnergyEngine
 from taprivo.core.events import Finger, Hand
-from taprivo.core.state import AppSnapshot
+from taprivo.core.state import AgentStatus, AppSnapshot
 from taprivo.simulator import KEY_MAP, Simulator
 from taprivo.ui.theme import Palette, is_dark, resolve
-from taprivo.ui.widgets import Badge, Card, Chip, EnergyBar, HandMap, StatusKind
+from taprivo.ui.widgets import Badge, Card, Chip, EnergyBar, HandMap, StatusKind, blend
 
 RENDER_INTERVAL_MS = 33
 WINDOW_WIDTH = 480
@@ -46,6 +47,23 @@ SPEND_FLOAT_MS = 600
 SPEND_FLOAT_RISE = 24
 COMBO_PULSE_MS = 300
 COMBO_PULSE_SCALE = 1.06
+AGENT_BAR_HEIGHT = 8
+#: One left column for `Context 63 %`, `5 h` and `7 d`, so the three bars line up.
+AGENT_LABEL_WIDTH = 84
+AGENT_BAR_WIDTH = 150
+#: Past this, the agent card is dimmed and says how long ago it last spoke.
+AGENT_STALE_SECONDS = 90
+#: The card re-reads the clock this often, so "resets in" and "last update" age
+#: even while nothing else in the HUD changes.
+AGENT_TICK_MS = 10_000
+AGENT_DIM_OPACITY = 0.55
+#: Share of a limit that still reads as comfortable, then as tight.
+AGENT_LIMIT_OK = 70.0
+AGENT_LIMIT_WARN = 90.0
+# The angle quotes are the breadcrumb the menu itself draws, not ASCII '>'.
+AGENT_HINT = "Show Claude Code usage: Setup… › Claude Code › status line"  # noqa: RUF001
+AGENT_NO_LIMITS = "not available on this plan"
+AGENT_ROWS = (("five_hour", "5 h"), ("seven_day", "7 d"))
 TRACKING_TEXT = {
     "inactive": "Inactive",
     "simulator": "Keyboard running",
@@ -101,6 +119,62 @@ def _tracking_badge(snapshot: AppSnapshot) -> tuple[str, str]:
     return glyph, short
 
 
+def _faded(color: str, ground: str, opacity: float) -> str:
+    """`color` as if drawn at `opacity` over `ground`. The card is dimmed this
+    way rather than with a QGraphicsOpacityEffect, which composites at the
+    wrong origin when the window is grabbed -- and grabbing is how it is
+    screenshotted and tested."""
+    return blend(QColor(ground), QColor(color), opacity).name()
+
+
+def _duration_text(seconds: int) -> str:
+    """A coarse, human span: `48 min`, `1 h 12 min`, `3 d 4 h`."""
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes} min"
+    hours, minutes = divmod(minutes, 60)
+    if hours < 24:
+        return f"{hours} h {minutes} min" if minutes else f"{hours} h"
+    days, hours = divmod(hours, 24)
+    return f"{days} d {hours} h" if hours else f"{days} d"
+
+
+def _reset_text(resets_at: int | None, now: float) -> str:
+    if resets_at is None:
+        return ""
+    remaining = resets_at - int(now)
+    if remaining <= 0:
+        return "resetting now"
+    if remaining < 60:
+        return "resets in under a minute"
+    if remaining < 3600:
+        return f"resets in {remaining // 60} m"
+    if remaining < 86400:
+        hours, rest = divmod(remaining, 3600)
+        return f"resets in {hours} h {rest // 60} m"
+    days, rest = divmod(remaining, 86400)
+    return f"resets in {days} d {rest // 3600} h"
+
+
+def _age_text(age_seconds: int) -> str:
+    return f"last update {_duration_text(max(age_seconds, 60))} ago"
+
+
+def _footer_text(status: AgentStatus) -> str:
+    parts = []
+    if status.cost_usd is not None:
+        parts.append(f"${status.cost_usd:.2f}")
+    if status.duration_s is not None:
+        parts.append(_duration_text(status.duration_s))
+    return " · ".join(parts)
+
+
+def _limit_kind(used: float) -> StatusKind:
+    if used < AGENT_LIMIT_OK:
+        return "ok"
+    return "warn" if used < AGENT_LIMIT_WARN else "err"
+
+
 class HudWindow(QWidget):
     def __init__(
         self,
@@ -111,8 +185,10 @@ class HudWindow(QWidget):
         *,
         on_open_setup: Callable[[], None] | None = None,
         palette: Palette | None = None,
+        clock: Callable[[], float] = time.time,
     ) -> None:
         super().__init__()
+        self._clock = clock
         self._engine = engine
         self._simulator = simulator
         self._config = config
@@ -122,6 +198,8 @@ class HudWindow(QWidget):
         self._spend_count: int | None = None
         self._combo_multiplier: float | None = None
         self._tap_counts: dict[tuple[Hand, Finger], int] = {}
+        self._agent_dimmed: bool | None = None
+        self._agent_drawn: AgentStatus | None = None
         if palette is not None:
             self._palette: Palette = palette
         else:
@@ -143,12 +221,20 @@ class HudWindow(QWidget):
         self._render_timer.setInterval(RENDER_INTERVAL_MS)
         self._render_timer.timeout.connect(self._render)
 
+        # The agent card carries two clock-derived lines; nothing else in the
+        # HUD needs a heartbeat, so it gets its own slow one.
+        self._agent_timer = QTimer(self)
+        self._agent_timer.setInterval(AGENT_TICK_MS)
+        self._agent_timer.timeout.connect(self._retick_agent)
+        self._agent_timer.start()
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(CONTENT_MARGIN, CONTENT_MARGIN, CONTENT_MARGIN, CONTENT_MARGIN)
         layout.setSpacing(SECTION_GAP)
         layout.addLayout(self._build_header())
         layout.addWidget(self._build_energy_card())
         layout.addWidget(self._build_hands_card())
+        layout.addWidget(self._build_agent_card())
         layout.addLayout(self._build_toolbar(on_open_camera, on_open_setup))
         layout.addWidget(self._build_footer())
 
@@ -308,6 +394,103 @@ class HudWindow(QWidget):
         inner.addWidget(self.hand_map)
         return card
 
+    def _build_agent_card(self) -> Card:
+        """Claude Code's own usage: model, context and the two rate limits."""
+        palette = self._palette
+        card = Card(palette=palette)
+        self.agent_card = card
+
+        heading = QLabel("CLAUDE CODE")
+        heading_font = QFont()
+        heading_font.setPixelSize(11)
+        heading_font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.2)
+        heading.setFont(heading_font)
+        self.agent_heading_label = heading
+
+        self.agent_model_label = QLabel("")
+        self.agent_model_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+
+        self.agent_hint_label = QLabel(AGENT_HINT)
+        self.agent_hint_label.setWordWrap(True)
+
+        self.agent_context_label = QLabel("Context")
+        self.agent_context_label.setFixedWidth(AGENT_LABEL_WIDTH)
+        self.agent_context_bar = self._build_agent_bar()
+
+        self.agent_limit_labels: dict[str, QLabel] = {}
+        self.agent_reset_labels: dict[str, QLabel] = {}
+        self.agent_limit_bars: dict[str, EnergyBar] = {}
+        self.agent_rows: dict[str, QWidget] = {}
+        for key, title in AGENT_ROWS:
+            self.agent_limit_labels[key] = QLabel(title)
+            self.agent_limit_labels[key].setFixedWidth(AGENT_LABEL_WIDTH)
+            self.agent_limit_bars[key] = self._build_agent_bar()
+            reset = QLabel("")
+            reset.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            self.agent_reset_labels[key] = reset
+        self.agent_five_hour_bar = self.agent_limit_bars["five_hour"]
+        self.agent_seven_day_bar = self.agent_limit_bars["seven_day"]
+
+        self.agent_footer_label = QLabel("")
+
+        header = QHBoxLayout()
+        header.setSpacing(8)
+        header.addWidget(heading)
+        header.addStretch(1)
+        header.addWidget(self.agent_model_label)
+
+        context = QHBoxLayout()
+        context.setSpacing(8)
+        context.addWidget(self.agent_context_label)
+        context.addWidget(self.agent_context_bar)
+        context.addStretch(1)
+        self.agent_context_row = self._row_widget(context)
+
+        inner = QVBoxLayout(card)
+        inner.setContentsMargins(CARD_MARGIN, 10, CARD_MARGIN, 10)
+        inner.setSpacing(7)
+        inner.addLayout(header)
+        inner.addWidget(self.agent_hint_label)
+        inner.addWidget(self.agent_context_row)
+        for key, _ in AGENT_ROWS:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            row.addWidget(self.agent_limit_labels[key])
+            row.addWidget(self.agent_limit_bars[key])
+            row.addStretch(1)
+            row.addWidget(self.agent_reset_labels[key])
+            self.agent_rows[key] = self._row_widget(row)
+            inner.addWidget(self.agent_rows[key])
+        inner.addWidget(self.agent_footer_label)
+
+        self._apply_agent_colors(dimmed=False)
+        self._show_agent_hint()
+        return card
+
+    def _build_agent_bar(self) -> EnergyBar:
+        bar = EnergyBar(palette=self._palette)
+        bar.setRange(0, 100)
+        bar.setFixedHeight(AGENT_BAR_HEIGHT)
+        bar.setFixedWidth(AGENT_BAR_WIDTH)
+        # These bars carry a percentage, not the hero meter: no glow.
+        bar.setReducedMotion(True)
+        return bar
+
+    @staticmethod
+    def _row_widget(layout: QHBoxLayout) -> QWidget:
+        """Wrap a row so the whole line can be hidden in one call.
+
+        The application stylesheet paints every bare QWidget with the window
+        background, which would draw a dark band across the card, so the
+        wrapper is explicitly transparent."""
+        widget = QWidget()
+        widget.setStyleSheet("background: transparent;")
+        layout.setContentsMargins(0, 0, 0, 0)
+        widget.setLayout(layout)
+        return widget
+
     def _build_toolbar(
         self,
         on_open_camera: Callable[[], None] | None,
@@ -410,6 +593,7 @@ class HudWindow(QWidget):
         self.rate_label.setText(_rate_text(snapshot))
         self._set_rate_steady(snapshot.rhythm_steady)
         self._render_badges(snapshot)
+        self._render_agent(snapshot.agent)
         self._render_spend(snapshot)
         self._render_combo_tier(snapshot)
         self.toggle_button.setText(_toggle_text(self._simulator.running))
@@ -424,6 +608,109 @@ class HudWindow(QWidget):
                 self.hand_map.flash(*key)
         self._tap_counts = dict(counts)
         self.hand_map.setCounts(counts)
+
+    # -- the Claude Code card ------------------------------------------------
+
+    def _retick_agent(self) -> None:
+        """Re-render the card on the clock alone: `resets in` and `last update`
+        keep moving while the agent is quiet."""
+        if self._latest is not None and self._latest.agent is not None:
+            self._render_agent(self._latest.agent)
+
+    def rendered_agent(self) -> AgentStatus | None:
+        """What the Claude Code card is currently showing, if anything."""
+        return self._agent_drawn
+
+    def _render_agent(self, status: AgentStatus | None) -> None:
+        self._agent_drawn = status
+        if status is None:
+            self._show_agent_hint()
+            return
+        now = self._clock()
+        age = max(int(now - status.received_at_ms / 1000), 0)
+        stale = age > AGENT_STALE_SECONDS
+        self._apply_agent_colors(dimmed=stale)
+
+        self.agent_hint_label.hide()
+        self.agent_model_label.setText(status.model or "")
+        self.agent_model_label.show()
+
+        known_context = status.context_used is not None
+        self.agent_context_row.setVisible(known_context)
+        if status.context_used is not None:
+            self.agent_context_label.setText(f"Context {round(status.context_used)} %")
+            self.agent_context_bar.setValue(round(status.context_used))
+
+        limits = {
+            "five_hour": (status.five_hour_used, status.five_hour_resets_at),
+            "seven_day": (status.seven_day_used, status.seven_day_resets_at),
+        }
+        has_limits = any(used is not None for used, _ in limits.values())
+        for key, (used, resets_at) in limits.items():
+            self.agent_rows[key].setVisible(has_limits)
+            self.agent_limit_labels[key].setVisible(has_limits)
+            self.agent_limit_bars[key].setVisible(used is not None)
+            self.agent_reset_labels[key].setAlignment(
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+            )
+            if used is None:
+                self.agent_reset_labels[key].setText("")
+                continue
+            self.agent_limit_bars[key].setValue(round(used))
+            self.agent_limit_bars[key].setAccent(self._agent_limit_color(used, stale))
+            self.agent_reset_labels[key].setText(_reset_text(resets_at, now))
+        if not has_limits:
+            # One dim sentence instead of two empty rows: an API-key user has
+            # no windows to show, and the row labels alone would read as broken.
+            self.agent_rows["five_hour"].show()
+            self.agent_limit_labels["five_hour"].hide()
+            self.agent_reset_labels["five_hour"].setAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
+            self.agent_reset_labels["five_hour"].setText(AGENT_NO_LIMITS)
+
+        footer = _age_text(age) if stale else _footer_text(status)
+        self.agent_footer_label.setText(footer)
+        self.agent_footer_label.setVisible(bool(footer))
+
+    def _show_agent_hint(self) -> None:
+        """Nothing has reported yet: collapse to the one line that explains how."""
+        self.agent_hint_label.show()
+        self.agent_model_label.hide()
+        self.agent_context_row.hide()
+        self.agent_footer_label.hide()
+        for row in self.agent_rows.values():
+            row.hide()
+
+    def _agent_limit_color(self, used: float, stale: bool) -> str:
+        palette = self._palette
+        color = {"ok": palette.ok, "warn": palette.warn, "err": palette.err}[_limit_kind(used)]
+        return _faded(color, palette.surface, AGENT_DIM_OPACITY) if stale else color
+
+    def _apply_agent_colors(self, *, dimmed: bool) -> None:
+        """Restyle the card only when it crosses the staleness line; a QSS
+        re-polish on every snapshot is not free."""
+        if dimmed == self._agent_dimmed:
+            return
+        self._agent_dimmed = dimmed
+        palette = self._palette
+        ground = palette.surface
+
+        def shade(color: str) -> str:
+            return _faded(color, ground, AGENT_DIM_OPACITY) if dimmed else color
+
+        dim, text = shade(palette.text_dim), shade(palette.text)
+        self.agent_heading_label.setStyleSheet(f"color: {dim}; font-size: 11px;")
+        self.agent_hint_label.setStyleSheet(f"color: {dim}; font-size: 11px;")
+        self.agent_model_label.setStyleSheet(f"color: {dim}; font-size: 12px;")
+        self.agent_context_label.setStyleSheet(f"color: {text}; font-size: 12px;")
+        self.agent_footer_label.setStyleSheet(f"color: {dim}; font-size: 11px;")
+        for key, _ in AGENT_ROWS:
+            self.agent_limit_labels[key].setStyleSheet(f"color: {text}; font-size: 12px;")
+            self.agent_reset_labels[key].setStyleSheet(f"color: {dim}; font-size: 11px;")
+            self.agent_limit_bars[key].setTrackColor(shade(palette.surface_alt))
+        self.agent_context_bar.setTrackColor(shade(palette.surface_alt))
+        self.agent_context_bar.setAccent(shade(palette.accent))
 
     def _render_badges(self, snapshot: AppSnapshot) -> None:
         glyph, short = _tracking_badge(snapshot)

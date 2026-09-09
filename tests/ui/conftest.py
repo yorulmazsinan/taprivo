@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 import pytest
@@ -9,6 +9,7 @@ from taprivo.core.energy import EnergyEngine
 from taprivo.simulator import Simulator
 from taprivo.ui.bridge import EngineSignals, connect_engine
 from taprivo.ui.hud import HudWindow
+from taprivo.ui.theme import Palette
 
 
 @dataclass
@@ -19,11 +20,21 @@ class HudBundle:
     config: Config
 
 
-def build_hud(qtbot: QtBot, config: Config | None = None) -> HudBundle:
+def build_hud(
+    qtbot: QtBot,
+    config: Config | None = None,
+    clock: Callable[[], float] | None = None,
+    palette: Palette | None = None,
+) -> HudBundle:
     cfg = config or Config()
     engine = EnergyEngine(cfg)
     simulator = Simulator(engine, cfg)
-    window = HudWindow(engine, simulator, cfg)
+    extra: dict[str, object] = {}
+    if clock is not None:
+        extra["clock"] = clock
+    if palette is not None:
+        extra["palette"] = palette
+    window = HudWindow(engine, simulator, cfg, **extra)  # type: ignore[arg-type]
     qtbot.addWidget(window)
     signals = EngineSignals(parent=window)
     signals.snapshot_changed.connect(window.on_snapshot)
