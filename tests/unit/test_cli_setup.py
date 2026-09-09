@@ -54,6 +54,32 @@ def test_setup_applies_and_hides_token(fake: tuple[FakeClaude, Path]) -> None:
     assert "--install-instructions" in result.output
 
 
+def test_setup_statusline_flag_installs_the_script(fake: tuple[FakeClaude, Path]) -> None:
+    _, home = fake
+    result = runner.invoke(cli.app, ["setup", "claude", "--statusline"])
+    assert result.exit_code == 0, result.output
+    assert paths.statusline_script_path().exists()
+    settings = json.loads((home / ".claude" / "settings.json").read_text())
+    assert settings["statusLine"]["command"] == str(paths.statusline_script_path())
+    assert paths.token_path().read_text().strip() not in result.output
+    assert "--statusline" not in result.output  # the hint is only shown when it is off
+
+
+def test_setup_without_the_flag_suggests_it(fake: tuple[FakeClaude, Path]) -> None:
+    result = runner.invoke(cli.app, ["setup", "claude"])
+    assert "--statusline" in result.output
+    assert not paths.statusline_script_path().exists()
+
+
+def test_remove_takes_the_status_line_back_out(fake: tuple[FakeClaude, Path]) -> None:
+    _, home = fake
+    runner.invoke(cli.app, ["setup", "claude", "--statusline"])
+    result = runner.invoke(cli.app, ["remove", "claude"])
+    assert result.exit_code == 0, result.output
+    assert not paths.statusline_script_path().exists()
+    assert "statusLine" not in json.loads((home / ".claude" / "settings.json").read_text())
+
+
 def test_setup_fails_without_claude(taprivo_home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         cli,

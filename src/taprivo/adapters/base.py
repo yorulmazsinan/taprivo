@@ -54,6 +54,7 @@ class Check:
 class SetupOptions:
     project: bool = False
     install_instructions: bool = False
+    statusline: bool = False
     project_dir: Path = field(default_factory=Path.cwd)
 
 

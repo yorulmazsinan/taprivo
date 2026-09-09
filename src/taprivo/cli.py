@@ -413,6 +413,11 @@ def setup_claude(
         "--install-instructions",
         help="Import the instruction file from ~/.claude/CLAUDE.md.",
     ),
+    statusline: bool = typer.Option(
+        False,
+        "--statusline",
+        help="Show Claude Code's model, context and usage limits in the HUD.",
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show planned changes without writing."),
     json_output: bool = JSON_OPTION,
 ) -> None:
@@ -429,10 +434,17 @@ def setup_claude(
             "Optional: 'taprivo setup claude --install-instructions' adds the budget rules to "
             "~/.claude/CLAUDE.md."
         )
+    if not statusline:
+        follow_up.append(
+            "Optional: 'taprivo setup claude --statusline' shows Claude Code's usage in the HUD."
+        )
     _run_setup(
         adapter,
         SetupOptions(
-            project=project, install_instructions=install_instructions, project_dir=Path.cwd()
+            project=project,
+            install_instructions=install_instructions,
+            statusline=statusline,
+            project_dir=Path.cwd(),
         ),
         dry_run=dry_run,
         json_output=json_output,

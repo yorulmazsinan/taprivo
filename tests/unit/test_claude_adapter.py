@@ -225,9 +225,148 @@ def test_verify_reports_each_check(adapter: tuple[ClaudeAdapter, FakeClaude]) ->
     assert before["claude_registration"] == "fail"
     assert before["instructions_file"] == "fail"
     assert before["instructions_import"] == "warn"
-    apply_all(ad, SetupOptions(install_instructions=True))
+    assert before["claude_statusline"] == "warn"
+    apply_all(ad, SetupOptions(install_instructions=True, statusline=True))
     after = {c.name: c.status for c in ad.verify()}
     assert set(after.values()) == {"ok"}
+
+
+def test_verify_warns_when_the_status_line_is_not_ours(
+    adapter: tuple[ClaudeAdapter, FakeClaude],
+) -> None:
+    ad, _ = adapter
+    apply_all(ad, SetupOptions(statusline=True))
+    ad.settings_path.write_text(
+        json.dumps({"statusLine": {"type": "command", "command": "theirs.sh"}}), encoding="utf-8"
+    )
+    check = next(c for c in ad.verify() if c.name == "claude_statusline")
+    assert (check.status, check.detail) == ("warn", "status line not installed")
+
+
+# -- status line ------------------------------------------------------------
+
+
+def test_status_line_script_is_executable_and_hides_the_token(
+    adapter: tuple[ClaudeAdapter, FakeClaude],
+) -> None:
+    ad, _ = adapter
+    apply_all(ad, SetupOptions(statusline=True))
+    script = ad.statusline_script_path
+    assert stat.S_IMODE(script.stat().st_mode) == 0o700
+    body = script.read_text()
+    assert paths.read_or_create_token() not in body
+    assert str(paths.token_path()) in body
+    assert "/statusline" in body
+    assert "bash" not in body.replace("#!/bin/sh", "")
+    settings = json.loads(ad.settings_path.read_text())
+    assert settings["statusLine"] == {
+        "type": "command",
+        "command": str(script),
+        "refreshInterval": 30,
+    }
+
+
+def test_status_line_merge_keeps_other_settings_and_backs_up(
+    adapter: tuple[ClaudeAdapter, FakeClaude],
+) -> None:
+    ad, _ = adapter
+    ad.settings_path.parent.mkdir(parents=True)
+    ad.settings_path.write_text(
+        json.dumps({"model": "opus", "permissions": {"allow": ["Bash"]}}), encoding="utf-8"
+    )
+    apply_all(ad, SetupOptions(statusline=True))
+    settings = json.loads(ad.settings_path.read_text())
+    assert settings["model"] == "opus"
+    assert settings["permissions"] == {"allow": ["Bash"]}
+    assert settings["statusLine"]["command"] == str(ad.statusline_script_path)
+    backups = list(ad.settings_path.parent.glob("settings.json.taprivo-backup-*"))
+    assert len(backups) == 1
+    assert json.loads(backups[0].read_text())["model"] == "opus"
+    assert not ad.statusline_chain_path.exists()
+
+
+def test_an_existing_status_line_is_chained_not_lost(
+    adapter: tuple[ClaudeAdapter, FakeClaude],
+) -> None:
+    ad, _ = adapter
+    theirs = {"type": "command", "command": "~/bin/ccline", "refreshInterval": 5}
+    ad.settings_path.parent.mkdir(parents=True)
+    ad.settings_path.write_text(json.dumps({"statusLine": theirs}), encoding="utf-8")
+    apply_all(ad, SetupOptions(statusline=True))
+    assert json.loads(ad.statusline_chain_path.read_text()) == theirs
+    assert json.loads(ad.settings_path.read_text())["statusLine"]["command"] == str(
+        ad.statusline_script_path
+    )
+
+
+def test_setting_up_twice_does_not_chain_our_own_script(
+    adapter: tuple[ClaudeAdapter, FakeClaude],
+) -> None:
+    ad, _ = adapter
+    apply_all(ad, SetupOptions(statusline=True))
+    assert apply_all(ad, SetupOptions(statusline=True))[-1] == "status line already configured"
+    assert not ad.statusline_chain_path.exists()
+
+
+def test_remove_restores_the_chained_status_line(
+    adapter: tuple[ClaudeAdapter, FakeClaude],
+) -> None:
+    ad, _ = adapter
+    theirs = {"type": "command", "command": "~/bin/ccline", "refreshInterval": 5}
+    ad.settings_path.parent.mkdir(parents=True)
+    ad.settings_path.write_text(json.dumps({"model": "opus", "statusLine": theirs}), "utf-8")
+    apply_all(ad, SetupOptions(statusline=True))
+    for action in ad.plan_remove(SetupOptions()).actions:
+        action.apply()
+    settings = json.loads(ad.settings_path.read_text())
+    assert settings["statusLine"] == theirs
+    assert settings["model"] == "opus"
+    assert not ad.statusline_script_path.exists()
+    assert not ad.statusline_chain_path.exists()
+
+
+def test_remove_drops_the_key_when_nothing_was_chained(
+    adapter: tuple[ClaudeAdapter, FakeClaude],
+) -> None:
+    ad, _ = adapter
+    apply_all(ad, SetupOptions(statusline=True))
+    for action in ad.plan_remove(SetupOptions()).actions:
+        action.apply()
+    assert "statusLine" not in json.loads(ad.settings_path.read_text())
+    assert not ad.statusline_script_path.exists()
+
+
+def test_remove_leaves_a_status_line_that_is_not_ours(
+    adapter: tuple[ClaudeAdapter, FakeClaude],
+) -> None:
+    ad, _ = adapter
+    theirs = {"type": "command", "command": "~/bin/ccline"}
+    ad.settings_path.parent.mkdir(parents=True)
+    ad.settings_path.write_text(json.dumps({"statusLine": theirs}), encoding="utf-8")
+    kinds = [a.kind for a in ad.plan_remove(SetupOptions()).actions]
+    assert "edit_json" not in kinds
+    assert json.loads(ad.settings_path.read_text())["statusLine"] == theirs
+
+
+def test_status_line_is_opt_in(adapter: tuple[ClaudeAdapter, FakeClaude]) -> None:
+    ad, _ = adapter
+    plan = ad.plan_setup(SetupOptions())
+    assert not any("status line" in a.description for a in plan.actions)
+    assert any("--statusline" in note for note in plan.notes)
+
+
+def test_malformed_settings_are_reported_not_overwritten(
+    adapter: tuple[ClaudeAdapter, FakeClaude],
+) -> None:
+    ad, _ = adapter
+    ad.settings_path.parent.mkdir(parents=True)
+    ad.settings_path.write_text("{not json", encoding="utf-8")
+    action = next(
+        a for a in ad.plan_setup(SetupOptions(statusline=True)).actions if a.kind == "merge_json"
+    )
+    with pytest.raises(SetupError, match="not valid JSON"):
+        action.apply()
+    assert ad.settings_path.read_text() == "{not json"
 
 
 # -- binary resolution ------------------------------------------------------

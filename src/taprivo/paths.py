@@ -27,6 +27,16 @@ def lock_path() -> Path:
     return home() / "app.lock"
 
 
+def statusline_script_path() -> Path:
+    """The status line command Claude Code runs on every assistant message."""
+    return home() / "statusline.sh"
+
+
+def statusline_chain_path() -> Path:
+    """The status line that was configured before Taprivo took the setting over."""
+    return home() / "statusline-chain.json"
+
+
 def log_dir() -> Path:
     return home() / "logs"
 
